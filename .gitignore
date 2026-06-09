@@ -5,6 +5,7 @@ xvault-images-work/
 
 plugin.video.xship-*.zip
 plugin.video.xvault-*.zip
+!kodi-repository/plugin.video.xvault/*.zip
 
 *.pyc
 __pycache__/
