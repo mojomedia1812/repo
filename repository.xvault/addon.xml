@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="repository.xvault"
+       name="xVAULT Repository"
+       version="1.0.0"
+       provider-name="xVAULT">
+    <extension point="xbmc.addon.repository">
+        <dir>
+            <info compressed="false">https://mojomedia1812.github.io/repo/addons.xml</info>
+            <checksum>https://mojomedia1812.github.io/repo/addons.xml.md5</checksum>
+            <datadir zip="true">https://mojomedia1812.github.io/repo/</datadir>
+            <hashes>false</hashes>
+        </dir>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="de_DE">Repository für xVAULT Kodi-Add-ons</summary>
+        <summary lang="en_GB">Repository for xVAULT Kodi add-ons</summary>
+        <description lang="de_DE">Installiert und aktualisiert xVAULT Add-ons über Kodi.</description>
+        <description lang="en_GB">Installs and updates xVAULT add-ons through Kodi.</description>
+        <platform>all</platform>
+        <assets>
+            <icon>icon.png</icon>
+            <fanart>fanart.png</fanart>
+        </assets>
+    </extension>
+</addon>
