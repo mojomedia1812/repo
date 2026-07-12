@@ -1,0 +1,22 @@
+{
+    "name": "xVAULT",
+    "plugin": "plugin.video.xvault",
+    "priority": 100,
+    "is_resolvable": "true",
+    "assert": {
+        "play_movie": [
+            "title",
+            "year",
+            "imdb"
+        ],
+        "play_episode": [
+            "showname",
+            "showyear",
+            "season",
+            "episode",
+            "imdb"
+        ]
+    },
+    "play_movie": "plugin://plugin.video.xvault/?action=playTMDbHelper&tmdbhelper=1&select=0&mediatype=movie&title={title_url}&originaltitle={originaltitle_url}&year={year}&imdb_id={imdb}&imdbnumber={imdb}&imdb={imdb}&tmdb_id={tmdb}&season=0&episode=0&poster={poster_url}",
+    "play_episode": "plugin://plugin.video.xvault/?action=playTMDbHelper&tmdbhelper=1&select=0&mediatype=tvshow&title={showname_url}&originaltitle={originaltitle_url}&year={showyear}&imdb_id={imdb}&imdbnumber={imdb}&imdb={imdb}&tmdb_id={tmdb}&season={season}&episode={episode}&premiered={showpremiered}&episode_title={title_url}&episode_premiered={premiered}&poster={poster_url}"
+}

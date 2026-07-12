@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <addons>
-<addon id="plugin.video.xvault" version="2026.06.08" name="[B]xVAULT[/B]" provider-name="xVAULT">
+<addon id="plugin.video.xvault" version="2026.07.12.1" name="[B]xVAULT[/B]" provider-name="xVAULT">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.requests"/>
@@ -9,7 +9,10 @@
         <import addon="script.module.kodi-six"/>
         <import addon="script.module.pyaes"/>
         <import addon="script.module.infotagger"/>
-        <import addon="script.module.resolveurl" version="5.1.100"/>
+        <import addon="script.module.resolveurl" version="5.1.100" optional="true"/>
+        <import addon="inputstream.adaptive" optional="true"/>
+        <import addon="inputstream.ffmpegdirect" optional="true"/>
+        <import addon="plugin.video.youtube" optional="true"/>
         <!-- for remote debug -->
         <import addon="script.module.pydevd" optional="true"/>
     </requires>
@@ -18,8 +21,9 @@
     </extension>
     <extension point="xbmc.service" library="service.py" start="startup" />
     <extension point="xbmc.addon.metadata">
-        <summary lang="de_DE">Filme und Serien durchsuchen und wiedergeben</summary>
-        <summary lang="en_GB">Browse and play movies and TV shows</summary>
+        <summary lang="de_DE">Filme, Serien und LiveTV durchsuchen und wiedergeben</summary>
+        <summary lang="en_GB">Browse and play movies, TV shows and live TV</summary>
+        <platform>all</platform>
         <assets>
 			<icon>resources/icon.png</icon>
 			<fanart>resources/fanart.png</fanart>
@@ -27,7 +31,7 @@
 		</assets>
     </extension>
 </addon>
-<addon id="repository.xvault" name="xVAULT Repository" version="1.0.0" provider-name="xVAULT">
+<addon id="repository.xvault" name="xVAULT Repository" version="1.0.3" provider-name="xVAULT">
   <extension point="xbmc.addon.repository">
     <dir>
       <info compressed="false">https://mojomedia1812.github.io/repo/addons.xml</info>

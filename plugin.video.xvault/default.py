@@ -1,9 +1,11 @@
-
-# 2023-05-10
-# edit 2025-06-12
-
-import sys, json
+import json
+import sys
 from urllib.parse import parse_qs, urlsplit
+from resources.lib import dependencies
+
+if not dependencies.ensure_all_dependencies():
+    sys.exit()
+
 from resources.lib import control
 
 params = dict(control.parse_qsl(control.urlsplit(sys.argv[2]).query))
@@ -14,8 +16,36 @@ table = params.get('table')
 title = params.get('title')
 source = params.get('source')
 
-# ------ navigator --------------
-if action == None or action == 'root':
+
+if action is None or action == 'root':
+    from resources.lib import updater
+    if updater.automatic_updates_enabled():
+        from resources.lib import repository
+        repository.ensure_xvault_repository()
+        if not updater.check_for_update():
+            sys.exit()
+    try:
+        from resources.lib import first_install
+        first_install.apply_playback_defaults_once()
+    except Exception:
+        pass
+    try:
+        from resources.lib import playback_settings
+        playback_settings.migrate_mode_setting()
+    except Exception:
+        pass
+    from resources.lib import startup_info
+    startup_info.show_pending_startup_info()
+    try:
+        from resources.lib.sync import favorites_sync
+        favorites_sync.check_and_push_if_changed(silent=True)
+    except Exception:
+        pass
+    try:
+        from resources.lib import linear_tv
+        linear_tv.clear_session_health()
+    except Exception:
+        pass
     from resources.lib.indexers import navigator
     navigator.navigator().root()
 
@@ -31,6 +61,58 @@ elif action == 'tvNavigator':
     from resources.lib.indexers import navigator
     navigator.navigator().tvshows()
 
+elif action == 'liveTVNavigator':
+    from resources.lib import linear_tv
+    linear_tv.show_home()
+
+elif action == 'liveTVRefresh':
+    from resources.lib import linear_tv
+    linear_tv.refresh()
+
+elif action == 'liveTVHealthCheck':
+    from resources.lib import linear_tv
+    linear_tv.check_channel_health()
+
+elif action == 'liveTVCategory':
+    from resources.lib import linear_tv
+    linear_tv.show_category(params.get('category'))
+
+elif action == 'liveTVSearch':
+    from resources.lib import linear_tv
+    linear_tv.show_search(params.get('query'))
+
+elif action == 'liveTVFavorites':
+    from resources.lib import linear_tv
+    linear_tv.show_favorites()
+
+elif action == 'liveTVFavoriteAdd':
+    from resources.lib import linear_tv
+    linear_tv.add_favorite(params.get('id'))
+
+elif action == 'liveTVFavoriteRemove':
+    from resources.lib import linear_tv
+    linear_tv.remove_favorite(params.get('id'))
+
+elif action == 'liveTVPlay':
+    from resources.lib import linear_tv
+    linear_tv.play(params.get('id'))
+
+elif action == 'liveTVLiteNavigator':
+    from resources.lib import linear_tv_lite
+    linear_tv_lite.show_home()
+
+elif action == 'liveTVLiteRefresh':
+    from resources.lib import linear_tv_lite
+    linear_tv_lite.refresh()
+
+elif action == 'liveTVLiteCategory':
+    from resources.lib import linear_tv_lite
+    linear_tv_lite.show_category(params.get('category'))
+
+elif action == 'liveTVLitePlay':
+    from resources.lib import linear_tv_lite
+    linear_tv_lite.play(params.get('id'))
+
 elif action == 'toolNavigator':
     from resources.lib.indexers import navigator
     navigator.navigator().tools()
@@ -39,7 +121,6 @@ elif action == 'downloadNavigator':
     from resources.lib.indexers import navigator
     navigator.navigator().downloads()
 
-# -------------------------------------------
 elif action == 'download':
     image = params.get('image')
     from resources.lib import downloader
@@ -52,8 +133,7 @@ elif action in ('sendToJD', 'sendToJD2', 'sendToMyJD', 'sendToPyLoad'):
     raw_url = item.get('url', '')
     jd_url = item.get('jd_url', '')
     if raw_url:
-        # Prefer JD-friendly URL (e.g. kinoger.ru -> VOE) over pre-resolved
-        # CDN/m3u8 URLs with time-limited tokens and header requirements.
+        # Prefer JD-friendly URLs over pre-resolved CDN/m3u8 URLs.
         if jd_url:
             url = jd_url
             source_url = None
@@ -61,17 +141,14 @@ elif action in ('sendToJD', 'sendToJD2', 'sendToMyJD', 'sendToPyLoad'):
             url = raw_url
             source_url = None
 
-            # Strip resolveurl's $$referer suffix (e.g. "https://vidhide.com/e/abc$$https://filmpalast.to/")
             if '$$' in url:
                 url = url.split('$$')[0]
 
-            # Handle Kodi-style |headers (e.g. "https://cdn.com/v.mp4|Referer=...&Origin=...")
             if '|' in url:
                 base_url, header_str = url.split('|', 1)
                 headers = dict(parse_qs(header_str, keep_blank_values=True))
                 referer = headers.get('Referer', [''])[0]
                 if referer and urlsplit(referer).path not in ('', '/'):
-                    # Referer has a real path — likely a hoster page JD can resolve
                     url = referer
                 else:
                     url = base_url
@@ -114,11 +191,6 @@ elif action == 'playExtern':
         else:
             mediatype = 'tvshow'
         sysmeta.update({'mediatype': mediatype})
-        # if control.getSetting('hosts.mode') == '2':
-        #     sysmeta.update({'select': '2'})
-        # else:
-        #     sysmeta.update({'select': '1'})
-        sysmeta.update({'select': control.getSetting('hosts.mode')})
         sysmeta = json.dumps(sysmeta)
         params.update({'sysmeta': sysmeta})
         from resources.lib import sources
@@ -126,12 +198,30 @@ elif action == 'playExtern':
     except:
         pass
 
+elif action == 'playTMDbHelper':
+    if not control.visible(): control.busy()
+    try:
+        params.update({'tmdbhelper': '1'})
+        from resources.lib import tmdbhelper_player
+        params = tmdbhelper_player.prepare_params(params)
+        from resources.lib import sources
+        sources.sources().play(params)
+    except Exception as e:
+        try:
+            from resources.lib import log_utils
+            log_utils.log('TMDb Helper playback failed: %s' % str(e), log_utils.LOGERROR)
+        except Exception:
+            pass
+        try:
+            from resources.lib import tmdbhelper_player
+            tmdbhelper_player.fail_resolved_url()
+        except Exception:
+            pass
+
 elif action == 'playURL':
     try:
         import resolveurl
         import xbmcgui, xbmc
-        #url = 'https://streamvid.net/embed-uhgo683xes41'
-        #url = 'https://moflix-stream.click/v/gcd0aueegeia'
         url = xbmcgui.Dialog().input("URL Input")
         hmf = resolveurl.HostedMediaFile(url=url, include_disabled=True, include_universal=False)
         try:
@@ -153,13 +243,15 @@ elif action == 'playURL':
                 stream_url, strhdr = url.split('|')
                 item.setProperty('inputstream.adaptive.stream_headers', strhdr)
                 if kodiver > 19: item.setProperty('inputstream.adaptive.manifest_headers', strhdr)
-                # item.setPath(stream_url)
                 url = stream_url
         item.setPath(url)
         xbmc.Player().play(url, item)
     except:
-        #print('Kein Video Link gefunden')
         control.infoDialog("Keinen Video Link gefunden", sound=True, icon='WARNING', time=1000)
+
+elif action and action.startswith('sync'):
+    from resources.lib.sync import account
+    account.dispatch(action)
 
 elif action == 'playTrailer':
     try:
@@ -177,9 +269,13 @@ elif action == 'playTrailer':
 elif action == 'UpdatePlayCount':
     from resources.lib import playcountDB
     playcountDB.UpdatePlaycount(params)
+    try:
+        from resources.lib.sync import binge_sync
+        binge_sync.push_local(silent=True)
+    except Exception:
+        pass
     control.execute('Container.Refresh')
 
-# listings -------------------------------
 elif action == 'listings':
     from resources.lib.indexers import listings
     listings.listings().get(params)
@@ -196,7 +292,6 @@ elif action == 'tvGenres':
     from resources.lib.indexers import listings
     listings.listings().tvGenres()
 
-# search ----------------------
 elif action == 'searchNew':
     from resources.lib import searchDB
     searchDB.search_new(table)
@@ -204,16 +299,11 @@ elif action == 'searchNew':
 elif action == 'searchClear':
     from resources.lib import searchDB
     searchDB.remove_all_query(table)
-    # if len(searchDB.getSearchTerms()) == 0:
-    #     control.execute('Action(ParentDir)')
 
 elif action == 'searchDelTerm':
     from resources.lib import searchDB
     searchDB.remove_query(name, table)
-    # if len(searchDB.getSearchTerms()) == 0:
-    #     control.execute('Action(ParentDir)')
 
-# person ----------------------
 elif action == 'person':
     from resources.lib.indexers import person
     person.person().get(params)
@@ -242,7 +332,6 @@ elif action == 'playfromPerson':
     from resources.lib import sources
     sources.sources().play(params)
 
-# movies ----------------------
 elif action == 'movies':
     from resources.lib.indexers import movies
     movies.movies().get(params)
@@ -251,7 +340,6 @@ elif action == 'moviesSearch':
     from resources.lib.indexers import movies
     movies.movies().search()
 
-# tvshows ---------------------------------
 elif action == 'tvshows': # 'tvshowPage'
     from resources.lib.indexers import tvshows
     tvshows.tvshows().get(params)
@@ -260,18 +348,25 @@ elif action == 'tvshowsSearch':
     from resources.lib.indexers import tvshows
     tvshows.tvshows().search()
 
-# seasons ---------------------------------
 elif action == 'seasons':
     from resources.lib.indexers import seasons
     seasons.seasons().get(params)  # params
 
-# episodes ---------------------------------
 elif action == 'episodes':
     from resources.lib.indexers import episodes
     episodes.episodes().get(params)
 
-# sources ---------------------------------
+elif action == 'playFromHere':
+    from resources.lib import seriesqueue
+    seriesqueue.start(params)
+
 elif action == 'play':
+    try:
+        params['_xvault_list_position'] = control.infoLabel('Container().CurrentItem')
+        params['_xvault_list_content'] = control.infoLabel('Container.Content')
+        params['_xvault_container_path'] = control.infoLabel('Container.FolderPath')
+    except:
+        pass
     if not control.visible(): control.busy()
     from resources.lib import sources
     sources.sources().play(params)
@@ -285,13 +380,11 @@ elif action == 'playItem':
     from resources.lib import sources
     sources.sources().playItem(title, source)
 
-# Settings ------------------------------
 elif action == "settings":  # alle Quellen aktivieren / deaktivieren
     from resources import settings
     settings.run(params)
 
 elif action == 'addonSettings':
-    # query = None
     query = params.get('query')
     control.openSettings(query)
 
@@ -301,15 +394,7 @@ elif action == 'resetSettings':
         control.reload_profile()
         control.sleep(500)
         control.execute('RunAddon("%s")' % control.addonId)
-        
+
 elif action == 'resolverSettings':
     import resolveurl as resolver
     resolver.display_settings()
-
-# try:
-#     import pydevd
-#     if pydevd.connected: pydevd.kill_all_pydev_threads()
-# except:
-#     pass
-# finally:
-#     exit()

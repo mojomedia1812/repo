@@ -8,7 +8,7 @@ import hashlib,os,codecs
 from sqlite3 import dbapi2 as database
 import xbmc, xbmcplugin
 from resources.lib.control import py2_encode, translatePath, executebuiltin
-from resources.lib import log_utils, control, playcountDB
+from resources.lib import log_utils, control, playcountDB, playback_settings
 
 try:
     import xmlrpclib as _xmlrpclib
@@ -28,6 +28,10 @@ class player(xbmc.Player):
         self.currentTime = 0
         self.playcount = 0
         self.watcher_control = False
+        self.list_position = 0
+        self.list_content = ''
+        self.queue_playback = False
+        self.queue_last = False
         self.isdebug = True if control.getSetting('status.debug') == 'true' else False
 
 
@@ -45,13 +49,18 @@ class player(xbmc.Player):
 
             if control.is_python2 and type(self.name) != unicode:
                 self.name = self.name.decode('utf-8')
-            self.imdb = meta['imdb_id'] if 'imdb_id' in meta else None
+            self.imdb = meta.get('imdb_id') or meta.get('imdbnumber') or meta.get('imdb')
             self.number_of_seasons = meta['number_of_seasons'] if 'number_of_seasons' in meta else None
             self.season = meta['season'] if 'season' in meta else None
             self.number_of_episodes = meta['number_of_episodes'] if 'number_of_episodes' in meta else None
             self.episode = meta['episode'] if 'episode' in meta else None
 
             self.playcount = meta['playcount'] if 'playcount' in meta else 0
+            self.list_position = int(meta.get('_xvault_list_position', 0) or 0)
+            self.list_content = meta.get('_xvault_list_content', '')
+            self.container_path = meta.get('_xvault_container_path', '')
+            self.queue_playback = bool(meta.get('_xvault_queue_playback', False))
+            self.queue_last = bool(meta.get('_xvault_queue_last', False))
             self.offset = bookmarks().get(self.name, self.year)
 
             from glob import glob
@@ -63,14 +72,27 @@ class player(xbmc.Player):
             plot = control.unquote(meta['plot']) if 'plot' in meta else ''
 
             Info = {'plot': plot}
-            Info.setdefault('IMDBNumber', meta['imdbnumber'])
+            if self.imdb:
+                Info.setdefault('IMDBNumber', self.imdb)
             if meta['mediatype'] == 'movie':
-                Info.setdefault('OriginalTitle', meta['title'])
-                Info.setdefault('year', meta['year'])
+                Info.setdefault('mediatype', 'movie')
+                if meta.get('title'):
+                    Info.setdefault('title', meta['title'])
+                if meta.get('title'):
+                    Info.setdefault('OriginalTitle', meta['title'])
+                if meta.get('year'):
+                    Info.setdefault('year', meta['year'])
             else:
-                Info.setdefault('TVshowtitle', meta['title'])
-                Info.setdefault('Season', self.season)
-                Info.setdefault('Episode', self.episode)
+                Info.setdefault('mediatype', 'episode')
+                if meta.get('episode_title'):
+                    Info.setdefault('title', meta['episode_title'])
+                if meta.get('title'):
+                    Info.setdefault('TVShowTitle', meta['title'])
+                    Info.setdefault('TVshowtitle', meta['title'])
+                if self.season != None:
+                    Info.setdefault('Season', self.season)
+                if self.episode != None:
+                    Info.setdefault('Episode', self.episode)
 
             item = control.item(label=self.name)
 
@@ -97,8 +119,25 @@ class player(xbmc.Player):
 
             item.setPath(url)
             try:
-                item.setArt({'poster': meta['poster']})
+                if meta.get('poster'):
+                    item.setArt({'poster': meta['poster']})
+            except:
+                pass
+            try:
                 item.setInfo(type='Video', infoLabels=Info)
+            except:
+                pass
+            try:
+                unique_ids = {}
+                if self.imdb:
+                    unique_ids['imdb'] = self.imdb
+                if meta.get('tmdb_id'):
+                    unique_ids['tmdb'] = str(meta['tmdb_id'])
+                if meta.get('tvdb_id'):
+                    unique_ids['tvdb'] = str(meta['tvdb_id'])
+                if unique_ids:
+                    default_id = 'imdb' if 'imdb' in unique_ids else sorted(unique_ids.keys())[0]
+                    item.setUniqueIDs(unique_ids, default_id)
             except:
                 pass
             item.setProperty('IsPlayable', 'true')
@@ -109,7 +148,8 @@ class player(xbmc.Player):
                 xbmc.Player().play(url, item)
             self.keepPlaybackAlive()
             return
-        except:
+        except Exception as e:
+            log_utils.log('Playback start failed: %s' % str(e), log_utils.LOGERROR)
             return
 
 
@@ -131,7 +171,7 @@ class player(xbmc.Player):
             if self.isPlayingVideo():
                 self.totalTime = self.getTotalTime()
                 self.currentTime = self.getTime()
-                watcher = (self.currentTime / self.totalTime >= .9)
+                watcher = self.totalTime > 0 and (self.currentTime / self.totalTime >= .9)
                 if watcher and not self.watcher_control:
                     playcountDB.updatePlaycount(self.mediatype, self.title, self.name, self.imdb, self.number_of_seasons, self.season, self.number_of_episodes, self.episode, 1)
                     #control.setSetting(id='watcher.control', value='true')
@@ -162,26 +202,74 @@ class player(xbmc.Player):
 
 
     def onPlayBackStopped(self):
+        self._finishPlayback(True, playback_ended=False)
+
+    def onPlayBackEnded(self):
+        self._finishPlayback(not self.queue_playback or self.queue_last, playback_ended=True)
+        if self.isdebug: log_utils.log('Ende - onPlayBackEnded', log_utils.LOGINFO)
+
+    def _finishPlayback(self, restore_navigation, playback_ended=False):
+        if self.streamFinished:
+            return
         if self.isdebug: log_utils.log('Start - onPlayBackStopped', log_utils.LOGINFO)
         self.runVideoDB()
         self.streamFinished = True
+        completed = self._completed(playback_ended)
+        if completed:
+            self.currentTime = self.totalTime if self.totalTime else self.currentTime
+            if not self.watcher_control:
+                self._markWatched()
+            self.watcher_control = True
         bookmarks().reset(self.currentTime, self.totalTime, self.name, self.year)
-        if self.isdebug: log_utils.log('vor parentDir - onPlayBackStopped', log_utils.LOGINFO)
-        if self.watcher_control:
-            self.parentDir()
-            self.watcher_control = False
+        try:
+            from resources.lib.sync import binge_sync
+            binge_sync.record_playback(self.meta, self.name, self.year, self.currentTime, self.totalTime, completed=completed, push=True)
+        except:
+            pass
+        if restore_navigation:
+            if self.isdebug: log_utils.log('vor parentDir - onPlayBackStopped', log_utils.LOGINFO)
+            restore_position = self._shouldRestoreListPosition()
+            try:
+                self.parentDir()
+            finally:
+                if restore_position:
+                    from resources.lib.utils import restoreListPosition
+                    restoreListPosition(self.list_position, self.list_content, __name__)
+        self.watcher_control = False
         if self.isdebug: log_utils.log('Ende - onPlayBackStopped', log_utils.LOGINFO)
 
-    def onPlayBackEnded(self):
-        self.onPlayBackStopped()
-        if self.isdebug: log_utils.log('Ende - onPlayBackEnded', log_utils.LOGINFO)
+    def _shouldRestoreListPosition(self):
+        if self.list_position <= 0:
+            return False
+        if self.mediatype != 'movie' and control.getSetting('status.position') == 'true':
+            return False
+        return True
+
+
+    def _completed(self, playback_ended=False):
+        if playback_ended:
+            return True
+        if self.watcher_control:
+            return True
+        try:
+            return bool(self.totalTime and self.currentTime and (float(self.currentTime) / float(self.totalTime) >= .9))
+        except:
+            return False
+
+
+    def _markWatched(self):
+        try:
+            playcountDB.createEntry(self.mediatype, self.title, self.name, self.imdb, self.number_of_seasons, self.season, self.number_of_episodes, self.episode)
+            playcountDB.updatePlaycount(self.mediatype, self.title, self.name, self.imdb, self.number_of_seasons, self.season, self.number_of_episodes, self.episode, 1)
+        except:
+            pass
 
 
     def parentDir(self):
         refreshtime = 2
         control.sleep(refreshtime)
         ccont = ''
-        if control.getSetting('hosts.mode') == '1': # Liste der Streams (Hosterliste) als Verzeichnis
+        if playback_settings.get_mode() == '1': # Liste der Streams (Hosterliste) als Verzeichnis
             count = 0
             # prÃ¼fen ob Hosterliste aktiv ist - content ist da 'videos'
             for count in range(1, 25+1):
@@ -212,12 +300,18 @@ class player(xbmc.Player):
             if control.getSetting('status.refresh.movies') == 'true' and self.mediatype == 'movie': # immer!
                 refresh = True
             elif control.getSetting('status.refresh.episodes') == 'true' and self.mediatype != 'movie':
-                if xbmc.getCondVisibility('system.platform.linux') and xbmc.getCondVisibility('system.platform.android'): refresh = True  # Android
-                elif control.getSetting('hosts.mode') == '1': refresh = True
+                refresh = True
 
             if refresh:
                 if refreshtime != 0: control.sleep(refreshtime)
-                control.execute('Container.Refresh')
+                self.refreshContainer()
+
+
+    def refreshContainer(self):
+        if self.mediatype != 'movie' and self.container_path:
+            control.execute('Container.Update(%s,replace)' % self.container_path)
+            return
+        control.execute('Container.Refresh')
 
 # keine EintrÃ¤ge fÃ¼r bookmarks und files in die Kodi DB 'MyVideos116.db' anlegen bzw. sofort lÃ¶schen
     def runVideoDB(self):

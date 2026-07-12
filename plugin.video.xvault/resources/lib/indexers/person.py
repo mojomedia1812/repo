@@ -40,7 +40,7 @@ class person:
 			pass
 
 	def search(self):
-		navigator.navigator().addDirectoryItem("[B]Darsteller - neue Suche[/B]", 'searchNew&table=person', self.activeSearchDB + '_people-search.png', 'DefaultAddonsSearch.png',
+		navigator.navigator().addDirectoryItem("[B]Darsteller - neue Suche[/B]", 'searchNew&table=person', '03_01_darsteller_neue_suche.png', 'DefaultAddonsSearch.png',
 											   isFolder=False, context=('Einstellungen', 'addonSettings'))
 		match = searchDB.getSearchTerms('person')
 		lst = []
@@ -55,7 +55,7 @@ class person:
 				lst += [(term)]
 
 		if delete_option:
-			navigator.navigator().addDirectoryItem("[B]Suchverlauf löschen[/B]", 'searchClear&table=person', 'tools.png', 'DefaultAddonProgram.png', isFolder=False)
+			navigator.navigator().addDirectoryItem("[B]Suchverlauf löschen[/B]", 'searchClear&table=person', '03_02_suchverlauf_loeschen.png', 'DefaultAddonProgram.png', isFolder=False)
 		navigator.navigator()._endDirectory('', False)  # addons  videos  files
 
 
