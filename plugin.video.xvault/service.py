@@ -1,8 +1,8 @@
 
 # 2022-10-09
-# edit 2025-07-15
+# edit 2026-06-13
 
-import sys, os, requests, threading
+import sys, os, threading
 from random import choice
 from xbmcaddon import Addon
 # from resources.lib.requestHandler import cRequestHandler
@@ -28,6 +28,15 @@ addonVersion = addonInfo('version')
 setSetting = Addon().setSetting
 _getSetting = Addon().getSetting
 _settingsLock = threading.Lock()
+SERIENSTREAM_OLD_DOMAIN = '.'.join(('s', 'to'))
+PROVIDER_DOMAIN_REPLACEMENTS = {
+    ('movie4k', 'movie4k-to.cfd'): 'movie4k.sx',
+    ('movie4k', 'www.movie4k-to.cfd'): 'movie4k.sx',
+    ('movie4k', 'movie4k.to'): 'movie4k.sx',
+    ('movie4k', 'www.movie4k.to'): 'movie4k.sx',
+    ('serienstream', SERIENSTREAM_OLD_DOMAIN): 'serienstream.to',
+    ('serienstream', 'www.' + SERIENSTREAM_OLD_DOMAIN): 'serienstream.to',
+}
 
 def getSetting(Name, default=''):
     result = _getSetting(Name)
@@ -104,16 +113,34 @@ def RandomUA():
     _User_Agents = [FF_USER_AGENT, OPERA_USER_AGENT, EDGE_USER_AGENT, CHROME_USER_AGENT, SAFARI_USER_AGENT]
     return choice(_User_Agents)
 
+def _doh_enabled():
+    return getSetting('bypassDNSlock', 'false') == 'true'
+
+def _checkdomain_with_doh(domain):
+    try:
+        from resources.lib.requestHandler import cRequestHandler
+        base_link = 'https://' + domain
+        request = cRequestHandler(base_link, caching=False, ignoreErrors=True)
+        content = request.request()
+        status = str(request.getStatus())
+        real_domain = urlparse(request.getRealUrl() or base_link).hostname or domain
+        error_markers = ('SEITE NICHT ERREICHBAR', 'CLOUDFLARE-SCHUTZ AKTIV', 'URL FEHLER', 'TIMEOUT', 'DDOS GUARD SCHUTZ')
+        if not content or content in error_markers:
+            return False, domain, status
+        if status in ('200', '301', '302') or content:
+            return True, real_domain, status
+    except Exception as exc:
+        if isLogger: logger.warning(' -> [service]: DoH domain check failed for %s: %s' % (domain, str(exc)))
+    return False, domain, None
+
 def _checkdomain(_domain, _provider):
     try:
+        import requests
         requests.packages.urllib3.disable_warnings()  # weil verify = False - ansonst Fehlermeldungen im kodi log
         check=None
         status_code=None
-        if _provider == 'vavoo':
-            with _settingsLock:
-                setSetting('provider.' + _provider + '.check', 'true')
-            return
         domain = getSetting('provider.'+ _provider +'.domain', _domain)
+        domain = PROVIDER_DOMAIN_REPLACEMENTS.get((_provider, domain), domain)
         base_link = 'https://' + domain
         try:
             UA=RandomUA()
@@ -138,6 +165,13 @@ def _checkdomain(_domain, _provider):
             #pass
         finally:
             wrongDomain = 'site-maps.cc', 'www.drei.at', 'notice.cuii.info'
+            if _doh_enabled() and (check != 'true' or domain in wrongDomain):
+                doh_domain = _domain if domain in wrongDomain else domain
+                doh_check, doh_domain, doh_status = _checkdomain_with_doh(doh_domain)
+                if doh_check and doh_domain not in wrongDomain:
+                    check = 'true'
+                    domain = doh_domain
+                    status_code = 'DoH:%s' % doh_status
             with _settingsLock:
                 if domain in wrongDomain:
                     setSetting('provider.' + _provider + '.check', '')
@@ -148,10 +182,59 @@ def _checkdomain(_domain, _provider):
             if isLogger: logger.info(' -> [service]: Provider: %s / Statuscode: %s / Domain: %s, Check: %s' % (_provider, status_code, domain, check))
     except: pass
 
+def ensure_youtube_api_keys():
+    """Preserve existing YouTube user API keys without shipping bundled secrets.
+
+    Public repository builds must not contain or generate embedded Google OAuth
+    credentials. Existing user-provided YouTube keys are left untouched.
+    """
+    import json
+    try:
+        yt_keys_path = translatePath('special://home/userdata/addon_data/plugin.video.youtube/api_keys.json')
+
+        if os.path.exists(yt_keys_path):
+            try:
+                with open(yt_keys_path, 'r') as f:
+                    existing = json.load(f)
+                if existing.get('keys', {}).get('user', {}).get('api_key', ''):
+                    return  # user key already configured - do not touch
+            except Exception:
+                pass  # unreadable - leave untouched
+        if isLogger:
+            logger.info('[service]: YouTube api_keys.json not modified; no bundled keys are shipped')
+    except Exception as e:
+        if isLogger:
+            logger.warning('[service]: Failed to check YouTube api_keys.json: %s' % str(e))
+
+
 if __name__ == "__main__":
-	import xbmc
-	if not xbmc.getCondVisibility("System.HasAddon(inputstream.adaptive)"):
-		xbmc.executebuiltin('InstallAddon(inputstream.adaptive)')
-		xbmc.executebuiltin('SendClick(11)')
+	from resources.lib import dependencies
+	dependencies.ensure_all_dependencies()
+	try:
+		from resources.lib import first_install
+		first_install.apply_playback_defaults_once()
+	except Exception:
+		pass
+	try:
+		from resources.lib import playback_settings
+		playback_settings.migrate_mode_setting()
+	except Exception:
+		pass
+	from resources.lib import updater
+	if updater.automatic_updates_enabled():
+		from resources.lib import repository
+		repository.ensure_xvault_repository()
 	check_domains()
 	delHtmlCache()
+	ensure_youtube_api_keys()
+	try:
+		from resources.lib.sync import binge_sync
+		binge_sync.pull_remote(apply_bookmarks=True, silent=True)
+	except Exception:
+		pass
+	try:
+		from resources.lib.sync import favorites_sync
+		favorites_sync.check_and_push_if_changed(silent=True)
+		favorites_sync.monitor_changes(interval=5)
+	except Exception:
+		pass

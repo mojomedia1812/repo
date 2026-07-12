@@ -1,7 +1,494 @@
-xVAULT 2026.06.08
+xVAULT 2026.07.12.1
+Entwickler: mojomedia1812
 
+- TMDb Helper kann xVAULT jetzt ueber einen eigenen Player-Pfad starten.
+- Der neue externe Pfad respektiert die bestehende xVAULT-Wiedergabelogik und schaltet nur den fuer TMDb Helper ungeeigneten Verzeichnismodus auf den Quellendialog um.
+- Kodi-Player-ListItems erhalten bei TMDb-Helper-Starts die passenden Video-InfoLabels und UniqueIDs fuer Movie/Episode-Erkennung.
+- Oeffentliche Repository-Builds enthalten keine gebuendelten Google-OAuth-Daten mehr; vorhandene YouTube-Nutzer-Keys bleiben unangetastet.
+
+xVAULT 2026.07.06.1
+Entwickler: mojomedia1812
+
+- Filmpalast-Suchpfade werden nicht mehr doppelt kodiert, damit Titel mit Leerzeichen und Umlauten wieder Treffer liefern.
+- Filmpalast nutzt die bestehende RequestHandler-Logik mit unveraendert kodierten URLs und wertet VOE-HD-Links aus der aktuellen Streamstruktur wieder aus.
+
+xVAULT 2026.07.05.5
+Entwickler: mojomedia1812
+
+- LiveTV lite bleibt auch bei temporaer nicht erreichbarer 2ix2-API nutzbar und liest dann Nydus als Ersatzquelle.
+- Nydus-Sender werden nach Deutsche TV, Österreichische TV und Schweizer TV einsortiert; echte HLS-Streams werden beim Start aus dem Nydus-Player dynamisch aufgeloest.
+- Browser-only- oder Cloudflare-Embed-Ziele aus Nydus werden nicht als defekter Kodi-Stream gestartet, sondern mit Hinweis abgefangen.
+
+xVAULT 2026.07.05.4
+Entwickler: mojomedia1812
+
+- Zuletzt gefundene Quellenlisten fuer Filme und Serien werden fuer die aktuelle Kodi-Sitzung kurz zwischengespeichert, damit ein erneuter Quellenwechsel nicht sofort wieder alle Indexseiten abfragt.
+- Der Quellen-Cache ist auf wenige Eintraege und 15 Minuten begrenzt und beruecksichtigt Titel, Folge, Sprache, Qualitaet, Sortierung, Limit und aktivierte Provider.
+- Hoster-Links werden weiterhin frisch aufgeloest und getestet; der Cache speichert nur die bereits gesammelte Quellenliste.
+- Der Wiedergabe-Waechter prueft den Fortschritt erst, wenn Kodi eine gueltige Gesamtlaufzeit meldet.
+- Das GitHub-Pages-Downloadarchiv wird auf die aktuelle Version plus zwei Vorversionen begrenzt, damit Deployments stabil kleiner bleiben.
+
+xVAULT 2026.07.05.3
+Entwickler: mojomedia1812
+
+- Serienwiedergaben brechen nicht mehr vor dem Kodi-Player-Start ab, wenn die Metadaten nur "imdb_id" statt "imdbnumber" enthalten.
+- Player-InfoLabels werden robuster aus vorhandenen Metadaten aufgebaut, damit Favoriten, alte Listen und Android/Kodi-Varianten keine fehlenden Pflichtfelder erzwingen.
+- Startfehler im Player werden jetzt im Kodi-Log als Playback-Startfehler protokolliert, statt still verschluckt zu werden.
+- VOE-Quellen werden bei Bedarf direkt in xVAULT auf einen abspielbaren MP4/HLS-Link aufgeloest, auch wenn ResolveURL die aktuelle VOE-Ausweichdomain noch nicht kennt.
+- Hoster-Seiten, die ResolveURL nicht zu einem echten Direktstream aufloesen kann, werden nicht mehr an Kodi als Video uebergeben.
+- Lokale Cookie-Laufzeitdaten werden beim Release-Build nicht mehr in das Add-on-ZIP aufgenommen.
+- Das GitHub-Pages-Downloadarchiv wird auf die aktuelle Version plus die letzten 10 Vorversionen begrenzt, damit die Repo-Page zuverlaessig deployed.
+
+xVAULT 2026.07.05.2
+Entwickler: mojomedia1812
+
+- SerienStream nutzt als feste Domain "serienstream.to".
+- Alte lokal gespeicherte SerienStream-Domainwerte werden beim Providercheck und beim Scraperstart automatisch auf "serienstream.to" migriert.
+- Der SerienStream-DoH-Fallback wurde auf die neue Domain und die passende aktuelle Fallback-IP umgestellt.
+- Bei Serien mit gleichem Veroeffentlichungsdatum mehrerer Folgen hat der Episodentitel jetzt Vorrang; Datums-Fallbacks werden nur noch genutzt, wenn sie eindeutig sind.
+
+xVAULT 2026.07.05.1
+Entwickler: mojomedia1812
+
+- SerienStream prueft bei Serienfolgen mit abweichender Anbieter-Staffelzaehlung den Episodentitel und die Erstausstrahlung, statt nur die direkte SxxExx-Nummer blind zu uebernehmen.
+- Folgen wie "Chilling Adventures of Sabrina" S1E12 werden dadurch auf die passende Anbieter-Staffel und Anbieter-Folge gemappt, wenn TMDB/xVAULT und Anbieter die Staffeln unterschiedlich schneiden.
+- Direkt gefundene Anbieterfolgen werden bei vorhandenem Episodentitel validiert, damit Quellen nicht auf eine falsche Folge zeigen.
+
+xVAULT 2026.07.04.7
+Entwickler: mojomedia1812
+
+- "Jetzt synchronisieren" bricht nicht mehr mit PluginError ab, wenn lokale Bookmark-Daten doppelte oder beschaedigte Fortsetzen-Eintraege enthalten.
+- Der Bookmark-Speicher bereinigt doppelte Eintraege beim Speichern und Entfernen und findet Fortsetzen-Eintraege auch dann wieder, wenn sie nicht an erster Stelle stehen.
+- Die manuelle Synchronisation gleicht den Login-Zustand vor dem Start ab und meldet unerwartete lokale Sync-Fehler sauber statt mit Python-Traceback.
+
+xVAULT 2026.07.04.6
+Entwickler: mojomedia1812
+
+- Die Einstellung "Standard-Aktion" verwendet im Kodi-Settingsdialog stabile Textwerte statt anfaelliger numerischer Enum-Werte.
+- Alte Profile mit "0", "1" oder "2" werden weiter verstanden und beim Start auf "Dialog", "Verzeichnis" oder "Autoplay" migriert.
+- "Dialog" bleibt dadurch auch dann gespeichert, wenn die Add-on-Einstellungen aus einer aktiven Folgen- oder Quellenliste heraus geoeffnet werden.
+
+xVAULT 2026.07.04.5
+Entwickler: mojomedia1812
+
+- Film- und Serienstarts verwenden die aktuelle Einstellung "Standard-Aktion" wieder als fuehrende Auswahl.
+- Alte Favoriten oder externe Wiedergabe-Links mit gespeichertem Autoplay-Wert koennen "Dialog" oder "Verzeichnis" nicht mehr ueberstimmen.
+- Neue externe Wiedergabe-Links speichern die Standard-Aktion nicht mehr fest in den Medien-Metadaten.
+
+xVAULT 2026.07.04.4
+Entwickler: mojomedia1812
+
+- Die xVAULT-Synchronisation verwendet die lokale Auth-Datei jetzt als fuehrende Login-Quelle, wenn Kodi-Settings und Auth-Datei auseinanderlaufen.
+- Veraltete Sync-API-Keys in den Kodi-Settings werden automatisch mit der Auth-Datei abgeglichen.
+- Server-Backups von Favoriten koennen dadurch wiederhergestellt werden, ohne faelschlich mit "Nicht angemeldet" abgewiesen zu werden.
+- Der Sync-API-Client versucht bei "UNAUTHORIZED" einen weiteren gespeicherten Key, falls Kodi noch einen abweichenden Key in den Settings haelt.
+
+xVAULT 2026.07.04.3
+Entwickler: mojomedia1812
+
+- Neuer Einstellungsbereich "Indexseiten 3 (DE)" fuer CINE.TO, FILMFANS, NOX, SERIENFANS und STREAMCLOUD.FORUM.
+- Neue lokale Scraper fuer CINE.TO, FILMFANS, NOX, SERIENFANS und STREAMCLOUD.FORUM wurden eingebunden.
+- STREAMCLOUD.FORUM kann Filme und Serien ueber die Such- und Playerstruktur auswerten und blendet interne Hilfslinks ohne abspielbaren Medienbezug aus.
+- Der bisherige Einstellungsbereich "Indexseiten (DE)" heisst nun "Indexseiten 1 (DE)".
+- Movie4k wurde auf die aktuelle API-Struktur ueber "movie4k.sx" umgestellt; alte gespeicherte Movie4k-Domains werden beim Providercheck automatisch migriert.
+- Die DoH-Logik wurde fuer die aktiven Indexseiten vereinheitlicht, sodass Seitenabrufe bei aktivierter Option ueber den xVAULT-RequestHandler mit Cloudflare-DoH laufen.
+- BS.to und SerienStream nutzen direkte Session-Requests nur noch als Rueckfall, wenn DNS over HTTPS deaktiviert ist.
+
+xVAULT 2026.07.04.2
+Entwickler: mojomedia1812
+
+- DNS over HTTPS kann in den allgemeinen Einstellungen aktiviert oder deaktiviert werden.
+- xVAULT nutzt bei aktivierter Option Cloudflare DNS over HTTPS fuer HTTP-Anfragen, ohne die urspruengliche Domain im Request zu ersetzen.
+- SerienStream/serienstream.to nutzt ebenfalls den neuen DoH-Weg; die bekannte feste SerienStream-IP wird nur noch als Rueckfall verwendet, wenn Cloudflare-DoH keine nutzbare Verbindung liefert.
+- Der Provider-Domaincheck beim Kodi-Start prueft bei aktivem DoH blockierte oder fehlgeschlagene Domains ein zweites Mal ueber den xVAULT-RequestHandler, damit Quellen nicht vorzeitig deaktiviert werden.
+
+xVAULT 2026.07.04.1
+Entwickler: mojomedia1812
+
+- Serien pruefen nun auch TMDB-Staffel 0 und zeigen vorhandene Specials oder Pilotfilme als eigenen Eintrag in der Staffelliste an.
+- Specials werden in der Episodenliste als "Special 01" statt als "0x01" dargestellt.
+- Staffel-0-Folgen bleiben beim Abspielen echte Serienfolgen und werden nicht mehr als Filme an die Scraper uebergeben.
+- SerienStream, BS.to und Vixstream koennen Staffel-0-Folgen jetzt gezielt als Serien-Specials behandeln.
+- Fehlende Ausstrahlungsdaten bei Staffeln oder Folgen blenden Eintraege nicht mehr versehentlich aus.
+
+xVAULT 2026.07.03.4
+Entwickler: mojomedia1812
+
+- SerienStream findet Sonderfolgen nun ueber Staffel 0, wenn die normale Serienfolge auf serienstream.to nicht vorhanden ist und der Episodentitel zur Special-Folge passt.
+- Episodentitel und Episoden-Erstausstrahlung werden an die Quellen-Scraper weitergereicht, damit Anbieter-Sonderfaelle gezielter erkannt werden koennen.
+- Vixstream speichert keine kurzlebigen Embed-Links mehr in der Quellenliste, sondern loest sie frisch beim Abspielen auf.
+- Filmpalast akzeptiert bei Serien nur noch Treffer mit passender SxxEyy-Kennung und nimmt S01E10 nicht mehr als Ersatz fuer S01E11.
+
+xVAULT 2026.07.03.3
+Entwickler: mojomedia1812
+
+- Nach Film- oder Episodenende konkurrieren automatischer Listenrefresh, Serien-Positionslogik und Positionswiederherstellung nicht mehr miteinander.
+- Serienlisten mit aktivierter Option "erste ungesehene Folge auswaehlen" setzen die Auswahl nun selbst; der Player stellt in diesem Fall nicht zusaetzlich die alte Episode wieder her.
+- Der doppelte Listenreload bei Serien wurde entfernt, damit Kodi nach Playback-Ende nicht zweimal hintereinander die Folgenliste neu aufbaut.
+- Handbuch um BS.to-Hinweise, Erstinstallationsvorgaben, Filmpalast-Verhalten sowie Konto-, Kennwort- und Synchronisationsaktionen ergaenzt.
+
+xVAULT 2026.07.03.2
+Entwickler: mojomedia1812
+
+- LiveTV-Senderlisten bieten eine Funktion, mit der alle aktuell sichtbaren Sender auf erreichbare Streams geprueft werden koennen.
+- Vor Start der LiveTV-Senderpruefung warnt xVAULT vor einer moeglichen Laufzeit von bis zu 30 Minuten und weist darauf hin, dass der Vorgang fuer schwache Systeme nicht empfohlen wird.
+- Nach Abschluss der LiveTV-Senderpruefung zeigt xVAULT in einem Ergebnisdialog an, wie viele Sender geprueft wurden, wie viele funktionieren und wie viele temporaer gesperrt wurden.
+- Nicht erreichbare LiveTV-Sender werden nach der Pruefung temporaer bis zum naechsten xVAULT-Hauptstart ausgeblendet.
+- Die LiveTV-Senderpruefung zeigt waehrend des Laufs Status und Fortschritt an und kann ueber den Kodi-Fortschrittsdialog abgebrochen werden.
+
+xVAULT 2026.07.03.1
+Entwickler: mojomedia1812
+
+- Vorbereitete LiveTV-Senderlisten-Pruefung mit Fortschrittsdialog, Warnhinweis und temporaerer Ausblendung nicht erreichbarer Sender.
+
+xVAULT 2026.07.02.4
+Entwickler: mojomedia1812
+
+- Neuer Hauptmenuepunkt LiveTV lite direkt nach LiveTV ergaenzt.
+- LiveTV lite liest Deutsche TV, Österreichische TV und Schweizer TV aus der 2ix2-WordPress-API, extrahiert die JWPlayer-HLS-Streams und spielt sie mit der bestehenden xVAULT-HLS-Konfiguration ab.
+- Nicht erreichbare 2ix2-HLS-Manifeste werden vor dem Kodi-Start abgefangen, damit tote Quellen keinen Playback-Fehler ausloesen.
+
+xVAULT 2026.07.02.3
+Entwickler: mojomedia1812
+
+- LiveTV bestaetigt HLS-Kandidaten vor der Kodi-Uebergabe in zwei weiteren kurzen Pruefrunden, damit flappende Sender mit wechselnden HTTP-500-Segmenten nicht in einem haengenden Player landen.
+- Leere oder nicht auswertbare HLS-Manifeste werden jetzt explizit blockiert, statt als scheinbar brauchbarer Stream durchzurutschen.
+
+xVAULT 2026.07.02.2
+Entwickler: mojomedia1812
+
+- LiveTV startet HLS-Sender nur noch, wenn das neueste Segment erreichbar ist; defekte Live-Rand-Segmente fuehren nun zum Ersatzstream statt zum Kodi-Playback-Fehler.
+- Signierte HLS-Manifest-URLs werden ohne Kodi-MIME-Query gestartet, damit Anbieter die URL nicht wegen zusaetzlicher Parameter ablehnen.
+
+xVAULT 2026.07.02.1
+Entwickler: mojomedia1812
+
+- LiveTV prueft vor dem Start mehrere aktuelle HLS-Segmente statt nur das letzte Segment der Playlist.
+- Fehlerhafte Range-Requests werden mit einem normalen Segmentabruf gegengeprueft, damit brauchbare Streams nicht faelschlich blockiert werden.
+- Bei instabilen Sendern nutzt xVAULT automatisch eng passende Ersatzstreams wie HD+ oder Backup-Varianten, ohne auf fremde Sender zu wechseln.
+
+xVAULT 2026.06.30.9
+Entwickler: mojomedia1812
+
+- Filmpalast erkennt die aktuelle Suchergebnis- und Streamlink-Struktur wieder.
+- Filmpalast nutzt fuer Such- und Detailseiten eine eigene HTTPS-Anfrage, damit %20-Suchpfade in Kodi nicht doppelt kodiert werden.
+- Filmpalast-Quellen werden nicht mehr vorzeitig durch ResolveURL gefiltert, damit gueltige Hoster in der Quellenliste sichtbar bleiben.
+- Parser- und Kodi-RPC-Test gegen Over Your Dead Body (2026), The Greatest Showman und Shrek 2 - Der tollkuehne Held kehrt zurueck erfolgreich durchgefuehrt.
+
+xVAULT 2026.06.30.8
+Entwickler: mojomedia1812
+
+- Frische Erstinstallationen setzen einmalig die Streamsprache auf Deutsch und die Standard-Aktion auf Autoplay.
+- Bestehende Profile und spaetere Updates behalten ihre gewaehlten Wiedergabe-Einstellungen; die Erstinstallationsvorgabe wird dort nicht erneut erzwungen.
+
+xVAULT 2026.06.30.7
+Entwickler: mojomedia1812
+
+- LiveTV ordnet FC-Bayern-Sender jetzt der Kategorie Sport statt Regional zu.
+- LiveTV berechnet Kategorien auch beim Laden eines vorhandenen Senderlisten-Caches neu, damit Korrekturen ohne manuellen Refresh greifen.
+
+xVAULT 2026.06.30.6
+Entwickler: mojomedia1812
+
+- BS.to zeigt nur noch Quellen an, die ohne reCAPTCHA-Anforderung erkannt werden.
+- CAPTCHA-geschuetzte BS.to-Quellen werden vor der Quellenliste ausgefiltert und nicht automatisiert umgangen.
+- Der optionale BS.to-Login bleibt freiwillig; ohne Zugangsdaten wird weiterhin nach frei verfuegbaren Quellen gesucht.
+
+xVAULT 2026.06.30.5
+Entwickler: mojomedia1812
+
+- Neuer optionaler Serien-Scraper fuer BS.to im xVAULT-Provider-System ergaenzt.
+- BS.to liest Serienliste, Staffel-/Episodenlinks, Deutsch/Englisch/Deutsch-Sub-Sprachen und Hoster aus der aktuellen Seitenstruktur.
+- Optionaler BS.to-Login in den Konten-Einstellungen ergaenzt; CAPTCHA-geschuetzte Hoster werden markiert und nicht automatisiert umgangen.
+
+xVAULT 2026.06.30.4
+Entwickler: mojomedia1812
+
+- Kinox erkennt die neue Suchseiten-Struktur und uebernimmt Deutsch, Englisch sowie Deutsch/Englisch als echte Stream-Sprachen.
+- Kinokiste, KKiste und Movie2k verwenden browsernahe API-Header, robuste Watch-URL-Fallbacks und uebernehmen die Sprache aus der Watch-Antwort.
+- VixStream reicht die bevorzugte Sprache bis in Embed- und Playlist-URL weiter; Huhu ist als mehrsprachiger Scraper markiert.
+- Movie2k2 verhindert breite Fallback-Falschtreffer wie Resident Alien zu Resident Evil.
+- Ignorierte RequestHandler-Fehler erzeugen keine Kodi-Error-Logs mehr; SerienStream wertet Fehler-Sentinel beim Login nicht mehr als erfolgreichen Login.
+- Die neue Projektregel verlangt nach Plugin-Aenderungen einen Kodi-Test per JSON-RPC.
+
+xVAULT 2026.06.30.3
+Entwickler: mojomedia1812
+
+- SerienStream liest jetzt alle Sprachvarianten einer Episode ein, statt nur deutsche Links zu uebernehmen.
+- Bei Resident Alien S01E01 werden bei Sprache Alle nun deutsche, englische und Ger-Sub-Quellen angezeigt.
+- Die zentrale Sprachzuordnung priorisiert explizite Scraper-Sprachangaben vor Zusatzinfos, damit Ger-Sub nicht faelschlich als Mehrsprachig markiert wird.
+- Der Fix wurde lokal in Kodi 21.3 per JSON-RPC gegen Resident Alien S01E01 getestet.
+
+xVAULT 2026.06.30.2
+Entwickler: mojomedia1812
+
+- Autoplay wird fuer Filme und Serien automatisch verhindert, wenn die bevorzugte Stream-Sprache auf Alle steht.
+- Bei Sprache Alle fragt xVAULT einmal nach Dialog oder Verzeichnis und speichert diese Auswahl als neue Standard-Aktion.
+- Autoplay bleibt fuer Deutsch, Englisch und Mehrsprachig weiterhin nutzbar.
+
+xVAULT 2026.06.30.1
+Entwickler: mojomedia1812
+
+- Film- und Serienquellen koennen jetzt nach bevorzugter Stream-Sprache sortiert oder strikt gefiltert werden.
+- Die Wiedergabe-Einstellungen wurden um Deutsch, Englisch, Mehrsprachig, unbekannte Sprache und Mehrsprachig-erlauben Optionen ergaenzt.
+- Streamlisten zeigen die erkannte Sprache mit DE, EN, MULTI oder ? direkt in der Quellenzeile an; LiveTV bleibt unveraendert deutsch.
+
+xVAULT 2026.06.29.8
+Entwickler: mojomedia1812
+
+- LiveTV-HLS startet jetzt plattformneutral ueber eine neue Wiedergabe-Engine-Auswahl: automatisch, Kodi intern, FFmpeg Direct oder InputStream Adaptive.
+- Der automatische Modus bevorzugt FFmpeg Direct, wenn es auf der Kodi-Plattform installiert und aktiviert ist, und faellt sonst auf Kodis interne HLS-Wiedergabe zurueck.
+- xVAULT prueft vor dem Start eines HLS-LiveTV-Streams Manifest und aktuelles Segment und loest defekte oder nicht erreichbare Streams einmal neu auf, damit Kodi nicht in einen nativen Crashpfad laeuft.
+
+xVAULT 2026.06.29.7
+Entwickler: mojomedia1812
+
+- LiveTV-Einstellungen um eine Puffergroesse in MB ergaenzt; 0 MB laesst den Kodi-Standard unveraendert.
+- Beim Start eines LiveTV-Streams setzt xVAULT die Kodi-Dateicachegroesse auf den gewaehlten Wert und aktiviert Netzwerkstream-Pufferung.
+
+xVAULT 2026.06.29.6
+Entwickler: mojomedia1812
+
+- LiveTV-Senderlisten zeigen im Infofeld des markierten Senders jetzt "Aktuell" und "Gleich" aus dem EPG.
+- Senderlogos werden als Poster/Thumb/Icon gesetzt, damit im Infofenster links oben das passende Senderlogo erscheint.
+- Fehlende Senderlogos werden ueber lokale Alias-Zuordnung und einen gecachten Logo-Fallback ergaenzt.
+
+xVAULT 2026.06.29.5
+Entwickler: mojomedia1812
+
+- LiveTV zeigt vor dem Streamstart die aktuell laufende Sendung aus einem lokalen XMLTV-EPG-Cache an.
+- EPG-Daten werden mit deutschem Kanal-Mapping lokal zwischengespeichert und auf LiveTV-Sendernamen wie RTL 2, 3sat, 13th Street oder Das Erste abgeglichen.
+- LiveTV-Einstellungen um EPG an/aus, EPG-Dialog und EPG-Cachezeit ergaenzt.
+
+xVAULT 2026.06.29.4
+Entwickler: mojomedia1812
+
+- LiveTV-Refresh beendet den Kodi-Directory-Aufruf jetzt sauber, damit beim Aktualisieren der Senderliste kein GetDirectory-Fehler im Kodi-Log entsteht.
+- Live-Test in Kodi 21.3 mit lokaler Installation durchgefuehrt: Senderliste geladen und ein HLS-Sender erfolgreich gestartet.
+
+xVAULT 2026.06.29.3
+Entwickler: mojomedia1812
+
+- LiveTV als eigenstaendiges xVAULT-Modul neu integriert.
+- Deutsche Sender werden ueber huhu.to geladen, lokal gecacht, kategorisiert und erst beim Abspielen aufgeloest.
+- LiveTV-Menue mit Kategorien, Suche, Favoriten, Refresh-Aktion und eigenen Einstellungen ergaenzt.
+- Historische Texte und GitHub-Page-Hinweise neutralisiert, damit keine alten Quellnamen mehr in den veroeffentlichten Dateien auftauchen.
+
+xVAULT 2026.06.29.2
+Entwickler: mojomedia1812
+
+- Neue Einstellung "Automatische Updates aktivieren" im Bereich Allgemein ergaenzt; Standard ist aktiviert.
+- Wenn die Einstellung deaktiviert ist, ueberspringt xVAULT den internen Update-Check und das automatische Repository-Bootstrap.
+- README, Add-on-Metadaten und GitHub Page auf die neue Version abgeglichen.
+
+xVAULT 2026.06.29.1
+Entwickler: mojomedia1812
+
+- Alter LiveTV-/Livestream-Bereich vollstaendig aus Hauptmenue, Routing und Einstellungen entfernt.
+- Eingebettete Altmodule samt Senderdaten und Playlists entfernt.
+- Add-on-Metadaten, README, Abhaengigkeitsdokumentation und GitHub Page auf Filme/Serien abgeglichen.
+
+xVAULT 2026.06.28.10
+Entwickler: mojomedia1812
+
+- Episoden werden bei natuerlichem Playback-Ende sofort als gesehen in die lokale Playcount-Datenbank geschrieben.
+- Bei gestopptem Playback ab 90 Prozent Fortschritt wird der Gesehen-Status ebenfalls sofort gesetzt.
+- Nach dem Playback wird der gespeicherte Staffel-Container gezielt neu geladen, damit die Folgenliste ohne Verlassen der Staffel aktualisiert wird.
+- GitHub Page nutzt Umami Analytics mit Do-Not-Track, ausgeschlossenen URL-Suchparametern und Link-Events.
+
+xVAULT 2026.06.28.9
+Entwickler: mojomedia1812
+
+- Gesehen-Status von Staffeln und Serien wird nach Episoden-Playback sofort aus den lokalen Episode-Eintraegen neu berechnet.
+- Staffel- und Folgenlisten werden nicht mehr auf Disk gecacht, damit Favoriten-Aufrufe keine alten Gesehen-Markierungen wiederverwenden.
+- Episodenlisten werden nach Wiedergabe auf allen Plattformen aktualisiert, wenn die Status-Aktualisierung aktiv ist.
+
+xVAULT 2026.06.28.8
+Entwickler: mojomedia1812
+
+- Staffel-Gesehenstatus wird jetzt aus den aktuell vorhandenen Folgen abgeleitet: erst wenn alle Folgen gesehen sind, gilt die Staffel als gesehen.
+- Serien-Gesehenstatus wird aus den aktuellen Staffeln abgeleitet und bei neuen ungesehenen Staffeln/Folgen wieder aufgehoben.
+- Frueher komplett gesehene Staffeln behalten ihre alten Folgen als gesehen, wenn spaeter neue ungesehene Folgen hinzukommen.
+
+xVAULT 2026.06.28.7
+Entwickler: mojomedia1812
+
+- Registrierung weist bei bereits vorhandener E-Mail-Adresse klar auf die bestehende Registrierung hin.
+- Kontenbereich um Kennwort-Wiederherstellung erweitert: fuer registrierte E-Mail-Adressen wird ein neues 9-stelliges Kennwort erzeugt und angezeigt.
+- Sync-API um den unauthentifizierten Endpunkt `password_reset` erweitert; alte API-Keys werden beim Zuruecksetzen ungueltig.
+
+xVAULT 2026.06.28.6
+Entwickler: mojomedia1812
+
+- Lokale `playcountDB`-Eintraege werden vor jedem Wiedergabestand-Push in den Sync-Stand uebernommen.
+- Beim Pull werden lokale gesehene Filme/Folgen mit synchronisierten Eintraegen kombiniert; ein lokaler Gesehen-Status wird nicht durch einen unvollstaendigen Remote-Stand ueberschrieben.
+- Bereits vollstaendige Remote-Eintraege mit besseren IDs bleiben erhalten, lokale Playcount-Importe fuellen nur fehlende Gesehen-Staende auf.
+
+xVAULT 2026.06.28.5
+Entwickler: mojomedia1812
+
+- Synchronisierte gesehene Filme und Serienfolgen werden beim Server-Pull in Kodis lokale Gesehen-Markierung uebernommen.
+- Film-, Staffel- und Folgenlisten nutzen den synchronisierten Wiedergabestand jetzt als Fallback, damit bereits gesehene Inhalte direkt als gesehen markiert werden.
+
+xVAULT 2026.06.28.4
+Entwickler: mojomedia1812
+
+- Favoriten-Sync fuehrt lokale und Server-Favoriten jetzt automatisch ohne doppelte Eintraege zusammen.
+- Lokal oder remote entfernte Favoriten werden ueber den letzten gemeinsamen Sync-Stand erkannt und nicht wieder hinzugefuegt.
+- Der Kodi-Service ueberwacht Aenderungen an `favourites.xml` und synchronisiert entfernte oder geaenderte Favoriten zeitnah im Hintergrund.
+
+xVAULT 2026.06.28.3
+Entwickler: mojomedia1812
+
+- Nach Anmeldung oder Registrierung startet xVAULT jetzt sofort die erste Synchronisierung mit dem frisch erhaltenen API-Key.
+- Der Login-Status wird zusaetzlich im Add-on-Profil gespiegelt, damit der manuelle Sync im noch offenen Kodi-Settingsfenster direkt funktioniert.
+
+xVAULT 2026.06.28.2
+Entwickler: mojomedia1812
+
+- Sync-Client fuer den vorgeschalteten Hosting-Check von xvault.xo.je angepasst, damit Kodi nach der Server-Challenge wieder JSON-Antworten der xVAULT-Sync-API erhaelt.
+
+xVAULT 2026.06.28.1
+Entwickler: mojomedia1812
+
+- Kontenbereich um xVAULT-Synchronisation mit Registrierung, Anmeldung, manuellem Sync, Favoriten-Wiederherstellung, Status und Datenschutz-Hinweis erweitert.
+- Favoriten-Backup fuer Kodis `favourites.xml` mit Hash-Erkennung, Server-Upload und Wiederherstellung hinzugefuegt.
+- Binge-/Wiedergabestand wird lokal gesammelt und bei aktivierter Synchronisation an die xVAULT-Sync-API gesendet.
+- PHP-API fuer Registrierung, Login, Favoriten, Binge-Stand und Gesamtsync inklusive Beispielkonfiguration und Deployment-Dokumentation ergaenzt.
+
+xVAULT 2026.06.20.3
+Entwickler: mojomedia1812
+
+- GitHub-Pages-Custom-Domain `xvault.ddnss.de` fuer das xVAULT-Repository ergaenzt.
+- Repository- und Update-URLs auf `http://xvault.ddnss.de/` umgestellt.
+
+xVAULT 2026.06.20.2
+Entwickler: mojomedia1812
+
+- Sprunghafte Auswahl in Episodenlisten korrigiert: Millisekunden-Wartezeiten in der Fokuslogik wurden faelschlich als Sekunden ausgefuehrt und konnten die Auswahl noch Minuten spaeter auf eine andere Folge setzen.
+
+xVAULT 2026.06.20.1
+Entwickler: mojomedia1812
+
+- Kodi-Repository-Metadaten korrigiert: xVAULT deklariert nun explizit `platform all`, damit Kodi das Add-on in der Repository-Liste als kompatibel anzeigt.
+- Repository-Add-on auf `repository.xvault` 1.0.1 angehoben, damit Kodi alte Repository-Metadaten nicht weiter aus dem Cache nutzt.
+
+xVAULT 2026.06.19.1
+Entwickler: mojomedia1812
+
+- LiveTV wieder aktiviert: Der Hauptmenuepunkt ist im xVAULT-Startmenue zurueck.
+- Beim Oeffnen von LiveTV werden zwei damalige Senderlisten parallel geladen und im Add-on-Profil gespeichert.
+- xVAULT migriert die deutsche Senderliste ID-basiert mit fehlenden Eintraegen und speichert das Ergebnis als `channels.json`.
+- Das LiveTV-Menue zeigt nur deutsche Sender aus den damals bereitgestellten Pruefdaten und gruppiert sie anhand der damaligen Kategoriedaten.
+- Sender werden ueber die zur ID passende Stream-URL aus `stream-link-auditor.json` aufgeloest und als HLS-Stream wiedergegeben.
+
+xVAULT 2026.06.14.10
+Entwickler: mojomedia1812
+
+- LiveTV im Add-on deaktiviert: Der Hauptmenuepunkt wurde entfernt.
+- Direkte alte LiveTV- und M3U-Plugin-URLs zeigen nun eine kurze Deaktiviert-Meldung statt Streams zu starten.
+- Joyn und Joyn-AT werden nicht mehr automatisch installiert, weil die M3U-LiveTV-Funktion deaktiviert ist.
+
+xVAULT 2026.06.14.9
+Entwickler: mojomedia1812
+
+- Live-TV-Resolver faengt Timeouts und andere Verbindungsfehler ab, damit Kodi nicht mehr mit einem Python-Fehler abbricht.
+- Wenn alle Live-TV-Streamkandidaten ausfallen, zeigt xVAULT jetzt eine klare Fehlermeldung statt kommentarlos zurueckzukehren.
+- LiveTV-Einstellungen fuer Cache-Kompression, Portal-Zugangsdaten und Kanalfilter werden nun korrekt aus dem xVAULT-Namespace gelesen.
+- Joyn und Joyn-AT werden fuer die gebuendelten M3U-Live-TV-Eintraege nun automatisch ueber Kodi installiert, falls sie fehlen.
+
+xVAULT 2026.06.14.8
+Entwickler: mojomedia1812
+
+- Die bereitgestellten Playlists `tv-at.m3u`, `tv.m3u` und `tv2.m3u` im Repository-Unterordner `m3u` eingebunden.
+- LIVE-TV-Menue um `M3U Live-TV` erweitert: die drei Playlists koennen direkt in xVAULT durchsucht und abgespielt werden.
+- Alte M3U-Plugin-URLs werden beim Anzeigen und Exportieren automatisch auf `plugin.video.xvault` umgeschrieben.
+- M3U-Export schreibt normalisierte xVAULT-M3U-Dateien ins Addon-Profil.
+- Joyn und Joyn-AT als optionale Addons deklariert, weil einige M3U-Eintraege direkt ueber diese Plugins laufen.
+
+xVAULT 2026.06.14.7
+Entwickler: mojomedia1812
+
+- Eine damalige externe Live-Erweiterung in xVAULT eingebettet: Live-TV, Filme, Serien, Favoriten, Suche, Gruppenwahl, Portal-Funktionen und M3U-Erstellung laufen nun ueber `plugin.video.xvault`.
+- LiveTV-Einstellungen in xVAULT uebernommen und in einem eigenen xVAULT-Profilbereich gespeichert.
+- LiveTV-M3U-URLs zeigen jetzt auf xVAULT-Plugin-Routen.
+- HLS-Wiedergabe faellt auf `inputstream.adaptive` zurueck, wenn `inputstream.ffmpegdirect` nicht installiert ist.
+
+xVAULT 2026.06.14.6
+Entwickler: mojomedia1812
+
+- Erststart-Infoscreen formatiert Markdown-Marker sichtbarkeitsfrei: `##` wird als grosse fette Ueberschrift angezeigt, `**...**` als fetter Text.
+- Die Formatierungszeichen werden im Infoscreen nicht mehr angezeigt.
+
+xVAULT 2026.06.14.5
+Entwickler: mojomedia1812
+
+- Erststart-Infoscreen mit erweitertem Dank an Team xShip und michaz1988 aktualisiert.
+- Erststart-Infoscreen wird nun ueber einen eigenen Flag gespeichert.
+- Neuinstallationen mit vorhandenem Kodi-Profil zeigen nicht mehr faelschlich den Update-Infoscreen, wenn der Erststart-Infoscreen noch nicht angezeigt wurde.
+
+xVAULT 2026.06.14.4
+Entwickler: mojomedia1812
+
+- LIVE-TV in ein Untermenue erweitert.
+- Optionale externe LiveTV-Anbindung ergaenzt: xVAULT kann das damalige externe Add-on aus dem Michaz-Repository installieren und oeffnen.
+- LiveTV-Favoriten, Einstellungen und M3U-Erstellung sind direkt aus xVAULT erreichbar.
+
+xVAULT 2026.06.14.3
+Entwickler: mojomedia1812
+
+- xVAULT legt beim Start automatisch das Kodi-Repository `repository.xvault` an, wenn das Add-on per ZIP installiert wurde.
+- GitHub-Pages-Ausgabe um Kodi-Repository-Metadaten `addons.xml`, `addons.xml.md5` und Repository-ZIP-Struktur erweitert.
+- Build-Script erzeugt neben der Download-ZIP nun auch Kodi-Repository-ZIPs fuer xVAULT und `repository.xvault`.
+
+xVAULT 2026.06.14.2
+Entwickler: mojomedia1812
+
+- Erststart-Infoscreen mit Hinweis auf xShip und Dank an das Team xShip ergänzt.
+- Update-Infoscreen ergänzt, der Änderungen seit der zuletzt benutzten Version anzeigt.
+- Changelog-Auswertung liest Versionen, Entwickler und Änderungen aus CHANGELOG.txt.
+- Interner Updater speichert die vorherige Version für den ersten Start nach einer Aktualisierung.
+
+xVAULT 2026.06.14.1
+Entwickler: mojomedia1812
+
+- Nicht im offiziellen Kodi-Repo verfuegbare Abhaengigkeiten werden beim Start aus ihren offiziellen Quellen nachinstalliert.
+- ResolveURL wird aus Gujals ResolveURL-Repository gebootstrappt und intern weiterhin als Pflichtmodul behandelt.
+- download-m3u8 wird bei fehlender Installation aus dem KC-Kodi-Repository-ZIP bezogen.
+- ResolveURL im Manifest optional markiert, damit die direkte ZIP-Installation von xVAULT nicht vor dem Bootstrap blockiert.
+
+xVAULT 2026.06.13.3
+Entwickler: mojomedia1812
+
+- Release-Paket um unreferenzierte Media-Dateien, Legacy-Providerduplikate und Backup-/Hilfsdateien verkleinert.
+- Dependency-Check pro Kodi-Sitzung gecached, damit wiederholte Plugin-Starts weniger Startarbeit ausfuehren.
+- Build-Script um explizite Runtime-Ausschluesse erweitert.
+
+xVAULT 2026.06.13.2
+Entwickler: mojomedia1812
+
+- Bootstrap-Installer fuer Kodi-Abhaengigkeiten ergaenzt.
+- Fehlende Pflicht- und Funktionsabhaengigkeiten werden beim Service-Start und vor dem Plugin-Start ueber Kodi installiert und aktiviert.
+- Dependency-Check laeuft ohne requests/six/resolveurl, damit fehlende Module nachinstalliert werden koennen.
+- inputstream.adaptive und plugin.video.youtube als optionale Kodi-Abhaengigkeiten dokumentiert.
+
+xVAULT 2026.06.13.1
+Entwickler: mojomedia1812
+
+- Standard-Aktion nach Neuinstallation auf Autoplay gesetzt.
+- Autoplay und Dialogauswahl ueberspringen nicht erreichbare Stream-URLs und versuchen die naechste Quelle.
+- Startpruefung auf neuere xVAULT-Version mit optionaler ZIP-Aktualisierung ergaenzt.
+- GitHub-Pages-Downloadseite und Build-Script fuer aktuelle Release-Pakete aktualisiert.
+
+xVAULT 2026.06.09.1
+Entwickler: mojomedia1812
+
+- Hauptmenü neu sortiert und um Kodis native LIVE-TV-Senderliste ergänzt.
 - Vollständiges Rebranding auf xVAULT.
 - Neue Icon-, Fanart- und Banner-Grafiken.
+- Sämtliche Menügrafiken durch den freigestellten 512x512-xVAULT-Satz ersetzt.
+- Installations-ZIP mit Kodi-konformen Pfaden und korrektem Add-on-Wurzelordner neu erstellt.
+- Auswahlposition nach der Wiedergabe für Filme und Episoden beibehalten.
 - Film-, Serien- und Personensuche repariert.
 - Unicode- und Sonderzeichen in Suchbegriffen korrigiert.
 - Staffel-, Episoden- und Credits-Navigation stabilisiert.

@@ -3,9 +3,9 @@
 #2021-07-15
 # edit 2025-08-02 switch from treads to concurrent.futures 
 
-import sys, re
+import sys
 import datetime, json, time
-from resources.lib import control, playcountDB
+from resources.lib import control, watched_status
 from resources.lib.tmdb import cTMDB
 from concurrent.futures import ThreadPoolExecutor
 from resources.lib.control import getKodiVersion
@@ -36,17 +36,18 @@ class episodes:
 				return
 			data['number_of_episodes'] = len(episodes)
 			self.sysmeta = json.dumps(data)
-			playcount = playcountDB.getPlaycount('season', 'title', self.title, season, None)
-			if playcount is None:
-				#playcountDB.createEntry('season', self.title, self.title + ' S%02d' % season, None, None, season, number_of_episodes, None)
-				playcount = 0
-			self.sysmeta = re.sub(r'"playcount": \d', '"playcount": %s' % playcount, self.sysmeta)
 
 			self.list.extend(episodes)
 
 			# for i in range(1, number_of_episodes+1):
 			#	 self.list.append({'tmdb_id': tmdb_id, 'tvdb_id': tvdb_id, 'season': season, 'episode': i})
 			self.worker()
+			playcount = watched_status.season_playcount(self.title, season, self.list, data.get('number_of_episodes'))
+			watched_status.store_season_status(self.title, self.title + ' S%02d' % int(season), season, data.get('number_of_episodes'), playcount)
+			if playcount == 0 and data.get('number_of_seasons'):
+				watched_status.store_tvshow_status(self.title, self.title, data.get('imdb_id'), data.get('number_of_seasons'), 0)
+			data['playcount'] = playcount
+			self.sysmeta = json.dumps(data)
 			self.Directory(self.list)
 			return  self.list
 		except:
@@ -71,13 +72,9 @@ class episodes:
 		try:
 			#meta = cTMDB().get_meta_episode('episode', '', self.list[i]['tmdb_id'] , self.list[i]['season'], self.list[i]['episode'], advanced='true')
 			meta = cTMDB()._format_episodes(i, self.title)
-			try:
-				playcount = playcountDB.getPlaycount('episode', 'title', self.title, meta['season'], meta['episode']) # mediatype, column_names, column_value, season=0, episode=0
-				playcount = playcount if playcount else 0
-				overlay = 7 if playcount > 0 else 6
-				meta.update({'playcount': playcount, 'overlay': overlay})
-			except:
-				pass
+			playcount = watched_status.episode_playcount(self.title, meta['season'], meta['episode'], meta)
+			overlay = 7 if playcount > 0 else 6
+			meta.update({'playcount': playcount, 'overlay': overlay})
 			self.meta.append(meta)
 		except:
 			pass
@@ -97,6 +94,10 @@ class episodes:
 
 		watchedMenu = "In %s [I]Gesehen[/I]" % control.addonName
 		unwatchedMenu = "In %s [I]Ungesehen[/I]" % control.addonName
+		from resources.lib import seriesqueue
+		queue_meta = json.loads(self.sysmeta)
+		queue_key = seriesqueue.make_key(queue_meta)
+		queue_items = []
 		pos = 0
 		for i in items:
 			try:
@@ -111,12 +112,19 @@ class episodes:
 				sysname = systitle + ' S%02dE%02d' % (season, episode)
 				sysmeta.update({'episode': episode})
 				sysmeta.update({'sysname': sysname})
+				if i.get('title'):
+					sysmeta.update({'episode_title': i['title']})
+				if i.get('premiered'):
+					sysmeta.update({'episode_premiered': i['premiered']})
 
 				_sysmeta = control.quote_plus(json.dumps(sysmeta))
 
-				if 'title' in i and i['title']: label = '%sx%02d  %s' % (season, episode, i['title'])
+				if int(season) == 0:
+					if 'title' in i and i['title']: label = 'Special %02d  %s' % (episode, i['title'])
+					else: label = 'Special %02d' % episode
+				elif 'title' in i and i['title']: label = '%sx%02d  %s' % (season, episode, i['title'])
 				else: label = '%sx%02d  Episode %s' % (season, episode,  episode)
-				if datetime.datetime(*(time.strptime(i['premiered'], "%Y-%m-%d")[0:6])) > datetime.datetime.now():
+				if i.get('premiered') and datetime.datetime(*(time.strptime(i['premiered'], "%Y-%m-%d")[0:6])) > datetime.datetime.now():
 					label = '[COLOR=red][I]{}[/I][/COLOR]'.format(label)  # ffcc0000
 
 				poster = i['poster'] if 'poster' in i and 'http' in i['poster'] else sysmeta['poster']
@@ -127,7 +135,10 @@ class episodes:
 					sysmeta.update({'plot': plot})
 
 				#plot = i['plot'] if 'plot' in i and len(i['plot']) > 50 else ''  #sysmeta['plot']
-				plot = '[COLOR blue]%s%sStaffel: %s   Episode: %s[/COLOR]%s%s' % (meta['title'], "\n",i['season'], i['episode'], "\n\n", plot)
+				if int(season) == 0:
+					plot = '[COLOR blue]%s%sSpecial / Pilotfilm: %s[/COLOR]%s%s' % (meta['title'], "\n", i['episode'], "\n\n", plot)
+				else:
+					plot = '[COLOR blue]%s%sStaffel: %s   Episode: %s[/COLOR]%s%s' % (meta['title'], "\n",i['season'], i['episode'], "\n\n", plot)
 
 				meta.update({'poster': poster})
 				meta.update({'fanart': fanart})
@@ -139,6 +150,16 @@ class episodes:
 				if settingFanart == 'true': item.setProperty('Fanart_Image', fanart)
 
 				cm = []
+				queue_index = len(queue_items)
+				queue_items.append(dict(sysmeta))
+				cm.append((
+					'Ab hier abspielen',
+					'RunPlugin(%s?action=playFromHere&queue=%s&index=%s)' % (
+						sysaddon,
+						control.quote_plus(queue_key),
+						queue_index,
+					),
+				))
 				try:
 					playcount = i['playcount'] if sysmeta['playcount'] == 0 else 1
 					if playcount == 1:
@@ -203,13 +224,14 @@ class episodes:
 			except:
 				pass
 
+		seriesqueue.store(queue_key, queue_items)
 		control.content(syshandle, 'movies')	# 'episodes' cpu last sehr hoch / movies
 		if control.skin == 'skin.estuary':
 			control.execute('Container.SetViewMode(%s)' % str(55))
 
 		control.plugincategory(syshandle, control.addonVersion)
-		control.endofdirectory(syshandle, cacheToDisc=True)
-		control.sleep(200)
+		control.endofdirectory(syshandle, cacheToDisc=False)
+		control.sleep(0.2)
 
 		# setzt Auswahl nach letzte als gesehen markierte Episode
 		if control.getSetting('status.position')== 'true':

@@ -337,81 +337,6 @@ def test_stream(stream_url):
 
     return int(http_code) < 400 or int(http_code) == 504
 
-#TODO
-def m3u8_check(stream_url):
-    if not '.m3u8' in (stream_url.split('|')[0]).lower(): return stream_url
-    try:
-        headers = dict([item.split('=') for item in (stream_url.split('|')[1]).split('&')])
-    except:
-        headers = {}
-    for header in headers:
-        headers[header] = urllib_parse.unquote_plus(headers[header])
-    req = urllib_request.Request(stream_url.split('|')[0], headers=headers)
-    try:
-        line = (urllib_request.urlopen(req).readlines())
-        if re.search(r'\.m4.', str(line)): return
-        # if '.m4s' in str(line):
-        #     return
-        # elif 'http' in str(line):
-        #     return stream_url
-        else:
-            return stream_url # new_m3u8(req, stream_url.split('|')[0])
-
-    except urllib_error.URLError as e:
-        if hasattr(e, 'reason')and 'certificate verify failed' in str(e.reason).lower():
-            return stream_url
-        return
-
-#TODO
-# def new_m3u8(req, url):
-#     import xbmcvfs
-#     new_m3u8_file = os.path.join(dataPath, 'temp.m3u8')
-#     loc_playlist = os.path.join(dataPath, 'myPlaylist.m3u')
-#     # scheme, netloc, path, query, frag = parse.urlsplit(url)
-#     http_scheme = urllib_parse.urlparse(url).scheme
-#     host = urllib_parse.urlparse(url).netloc
-#     url_path = os.path.split(url)[0] + '/'
-#     url_file = os.path.split(url)[1]
-#     base_url = '%s://%s' % (http_scheme, host)
-#
-#     data = ''
-#     for line in urllib_request.urlopen(req).readlines():
-#         line = line.strip()
-#         #a = line.decode("utf-8")
-#         line = convert(line, http_scheme, base_url, url_path)
-#         if line:
-#             data = data + ('{0}\n'.format(line))
-#     #print(data)
-#     m3u8 = xbmcvfs.File(new_m3u8_file, 'w')
-#     m3u8.write(data)
-#     m3u8.close()
-#     if not xbmcvfs.exists(loc_playlist):
-#         #L = "#EXTM3U \n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:PROGRAM-ID=1\n%s\n"] % str(new_m3u8_file)
-#         #L = "#EXTM3U \n#EXTINF:0,temp.m3u8\nfile:///%s\n" % str(new_m3u8_file)
-#         L = "#EXTM3U \n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:PROGRAM-ID=1\n%s\n" % str(new_m3u8_file)
-#         loc_playlist = xbmcvfs.File(loc_playlist, 'w')
-#         loc_playlist.write(L)
-#         #loc_playlist.write(str(new_m3u8_file))
-#         loc_playlist.close()
-#     return new_m3u8_file #loc_playlist new_m3u8_file
-#
-#
-# def convert(line, http_scheme, base_url, url_path):
-#     if line.startswith('#EXT-X-MAP'):
-#         pattern = '''URI=(?:'|")(.+?)(?:'|")'''
-#         URI = re.search(pattern, line).group(1)
-#         if URI.startswith('//'): URI =  '%s:%s' % (http_scheme, URI)
-#         elif URI.startswith('/'): URI =  base_url + URI
-#         elif URI.startswith('http'): return URI
-#         else: URI =  url_path + URI
-#         return '#EXT-X-MAP:URI="%s"' % URI
-#     elif line.startswith('#'): return line
-#     elif line.startswith('http'): return line
-#     elif line.startswith('//'): return '%s:%s' % (http_scheme, line)
-#     elif line.startswith('/'): return base_url + line
-#     else: return url_path + line
-
-
 def normalize(title):
     from sys import version_info
     try:
@@ -441,7 +366,7 @@ def setPosition(pos, _name, content='movies'): # org.: episodes
     for count in range(1, 15):
         ccont = getInfoLabel("Container.Content")
         if ccont == content: break
-        sleep(100)
+        sleep(0.1)
 
     if isdebug:
         log_utils.log(_name + ' - Container.Content (1) - soll: %s ist: %s  count: %s' % (content, getInfoLabel("Container.Content"), count), log_utils.LOGINFO)
@@ -454,17 +379,73 @@ def setPosition(pos, _name, content='movies'): # org.: episodes
             cid = getInfoLabel("System.CurrentControlID")
             ctrl = win.getControl(int(cid))
         except:
-            sleep(200)
+            sleep(0.2)
             continue
 
         ctrl.selectItem(pos_sp)
-        sleep(100)
+        sleep(0.1)
         check = int(getInfoLabel("Container().CurrentItem"))  # % cid)) # Container().CurrentItem
         if pos == check: break
 
     if isdebug:
         log_utils.log(_name + ' - pos: %s - check: %s - count: %s' % (pos, int(getInfoLabel("Container().CurrentItem")),count), log_utils.LOGINFO)
         log_utils.log(_name + ' - System.CurrentControlID:  %s' % getInfoLabel("System.CurrentControlID"), log_utils.LOGINFO)
+
+
+def restoreListPosition(pos, content='', _name=''):
+    """Restore the exact selected media item after playback or a container refresh."""
+    import time
+    import xbmc
+    import xbmcgui
+
+    try:
+        pos = int(pos)
+    except:
+        return False
+    if pos < 1:
+        return False
+
+    index = pos if showparentdiritems() else pos - 1
+    deadline = time.time() + 12
+    monitor = xbmc.Monitor()
+    stable_checks = 0
+    monitor.waitForAbort(0.5)
+
+    while time.time() < deadline and not monitor.abortRequested():
+        try:
+            if xbmc.getCondVisibility('Container.IsUpdating') or \
+                    xbmc.getCondVisibility('Window.IsActive(busydialog)') or \
+                    xbmc.getCondVisibility('Window.IsActive(busydialognocancel)'):
+                stable_checks = 0
+                monitor.waitForAbort(0.2)
+                continue
+
+            current_content = getInfoLabel('Container.Content')
+            if content and current_content != content:
+                stable_checks = 0
+                monitor.waitForAbort(0.2)
+                continue
+
+            control_id = int(getInfoLabel('System.CurrentControlID'))
+            window = xbmcgui.Window(xbmcgui.getCurrentWindowId())
+            window.getControl(control_id).selectItem(index)
+            monitor.waitForAbort(0.25)
+
+            if int(getInfoLabel('Container().CurrentItem')) == pos:
+                stable_checks += 1
+                if stable_checks >= 3:
+                    if getSetting('status.debug') == 'true':
+                        log_utils.log('%s - restored list position: %s' % (_name, pos), log_utils.LOGINFO)
+                    return True
+            else:
+                stable_checks = 0
+        except:
+            stable_checks = 0
+        monitor.waitForAbort(0.2)
+
+    if getSetting('status.debug') == 'true':
+        log_utils.log('%s - failed to restore list position: %s' % (_name, pos), log_utils.LOGWARNING)
+    return False
 
 
 def getParams(_params):

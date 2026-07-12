@@ -8,7 +8,7 @@ import datetime, time, json
 from resources.lib.tmdb import cTMDB
 from concurrent.futures import ThreadPoolExecutor
 from resources.lib.indexers import navigator
-from resources.lib import searchDB, playcountDB, art, control
+from resources.lib import searchDB, art, control, watched_status
 from resources.lib.control import getKodiVersion, iteritems
 if int(getKodiVersion()) >= 20: from infotagger.listitem import ListItemInfoTag
 
@@ -53,7 +53,7 @@ class tvshows:
 	def search(self):
 		# TODO different search providers
 		#navigator.navigator().addDirectoryItem("DB für Suche auswählen", 'tvChangeSearchDB', self.activeSearchDB + '.png', 'DefaultTVShows.png', isFolder=False)
-		navigator.navigator().addDirectoryItem("[B]Serien - neue Suche %s[/B]" % self.activeSearchDB, 'searchNew&table=tvshows', self.activeSearchDB + '_search.png', 'DefaultAddonsSearch.png',
+		navigator.navigator().addDirectoryItem("[B]Serien - neue Suche %s[/B]" % self.activeSearchDB, 'searchNew&table=tvshows', '02_01_serien_neue_suche_tmdb.png', 'DefaultAddonsSearch.png',
 											   isFolder=False, context=('Einstellungen', 'addonSettings'))
 		match = searchDB.getSearchTerms('tvshows')
 		lst = []
@@ -68,7 +68,7 @@ class tvshows:
 				lst += [(term)]
 
 		if delete_option:
-			navigator.navigator().addDirectoryItem("[B]Suchverlauf löschen[/B]", 'searchClear&table=tvshows', 'tools.png', 'DefaultAddonProgram.png', isFolder=False)
+			navigator.navigator().addDirectoryItem("[B]Suchverlauf löschen[/B]", 'searchClear&table=tvshows', '02_02_suchverlauf_loeschen.png', 'DefaultAddonProgram.png', isFolder=False)
 		navigator.navigator()._endDirectory('', False) # addons  videos  files
 
 # TODO different search providers
@@ -274,13 +274,9 @@ class tvshows:
 					poster = art.getTvShows_art(meta['tmdb_id'], meta['tvdb_id'])
 					meta.update({'poster': poster})
 
-			try:
-				playcount = playcountDB.getPlaycount('tvshow', 'title', meta['title'], None, None)
-				playcount = playcount if playcount else 0
-				overlay = 7 if playcount > 0 else 6
-				meta.update({'playcount': playcount, 'overlay': overlay})
-			except:
-				pass
+			playcount = watched_status.tvshow_playcount(meta['title'], number_of_seasons=meta.get('number_of_seasons'))
+			overlay = 7 if playcount > 0 else 6
+			meta.update({'playcount': playcount, 'overlay': overlay})
 			self.meta.append(meta)
 			return meta
 		except:

@@ -3,11 +3,11 @@
 #2021-07-21
 # edit 2025-08-02 switch from treads to concurrent.futures 
 
-import sys, re
+import sys
 import datetime, time, json
 from resources.lib.tmdb import cTMDB
 from concurrent.futures import ThreadPoolExecutor
-from resources.lib import control, playcountDB, log_utils
+from resources.lib import control, playcountDB, watched_status
 from resources.lib.control import getKodiVersion
 if int(getKodiVersion()) >= 20: from infotagger.listitem import ListItemInfoTag
 
@@ -26,23 +26,31 @@ class seasons:
 		try:
 			data = json.loads(params['sysmeta'])
 			self.title = data['title']
-			if not 'number_of_seasons' in data or not data['number_of_seasons']: return
-			number_of_seasons = data['number_of_seasons']
+			number_of_seasons = data.get('number_of_seasons') or 0
+			try:
+				number_of_seasons = int(number_of_seasons)
+			except:
+				number_of_seasons = 0
 
 			tmdb_id = data['tmdb_id']
 			tvdb_id = data['tvdb_id'] if 'tvdb_id' in data else None
 			imdb_id = data['imdb_id'] if 'imdb_id' in data else None
 			title = data['title']
 
-			playcount = playcountDB.getPlaycount('tvshow', 'title', title, None, None)
-			if playcount is None:
-				#playcountDB.createEntry('tvshow', title, title, imdb_id, number_of_seasons, None, None, None)
-				playcount = 0
-			self.sysmeta = re.sub(r'"playcount": \d', '"playcount": %s' % playcount, self.sysmeta)
+			self.imdb_id = imdb_id
+			self.number_of_seasons = number_of_seasons
+			self.tvshow_status = playcountDB.getTvshowStatus(title)
+			data['playcount'] = watched_status.tvshow_playcount(title, number_of_seasons=number_of_seasons, tvshow_status=self.tvshow_status)
+			self.sysmeta = json.dumps(data)
 
+			self.list.append({'tmdb_id': tmdb_id, 'tvdb_id': tvdb_id, 'season': 0, 'is_special': True})
 			for i in range(1, number_of_seasons+1):
 				self.list.append({'tmdb_id': tmdb_id, 'tvdb_id': tvdb_id, 'season': i})
 			self.worker()
+			show_playcount = watched_status.tvshow_playcount(title, self.list, number_of_seasons, self.tvshow_status)
+			watched_status.store_tvshow_status(title, title, imdb_id, number_of_seasons, show_playcount)
+			data['playcount'] = show_playcount
+			self.sysmeta = json.dumps(data)
 			if self.list == None or len(self.list) == 0:	# nichts gefunden
 				control.infoDialog("Nichts gefunden", time=8000)
 			else:
@@ -65,13 +73,26 @@ class seasons:
 	def super_meta(self, i):
 		try:
 			meta = cTMDB().get_meta_seasons(i['tmdb_id'] , i['season'], advanced='true')
-			try:
-				playcount = playcountDB.getPlaycount('season', 'title', self.title, meta['season'], None)
-				playcount = playcount if playcount else 0
-				overlay = 7 if playcount > 0 else 6
-				meta.update({'playcount': playcount, 'overlay': overlay})
-			except:
-				pass
+			if not meta or not meta.get('number_of_episodes'):
+				return
+			if i.get('is_special'):
+				meta.update({'is_special': True})
+			playcount = watched_status.season_playcount(
+				self.title,
+				meta['season'],
+				meta.get('episodes'),
+				meta.get('number_of_episodes'),
+				tvshow_status=getattr(self, 'tvshow_status', None),
+			)
+			watched_status.store_season_status(
+				self.title,
+				self.title + ' S%02d' % int(meta['season']),
+				meta['season'],
+				meta.get('number_of_episodes'),
+				playcount,
+			)
+			overlay = 7 if playcount > 0 else 6
+			meta.update({'playcount': playcount, 'overlay': overlay})
 			self.meta.append(meta)
 		except:
 			pass
@@ -89,6 +110,7 @@ class seasons:
 
 		watchedMenu = "In %s [I]Gesehen[/I]" % control.addonName
 		unwatchedMenu = "In %s [I]Ungesehen[/I]" % control.addonName
+		normal_season_count = len([item for item in items if int(item.get('season') or 0) > 0])
 		pos = 0
 		for i in items:
 			try:
@@ -106,8 +128,11 @@ class seasons:
 				_sysmeta.pop('cast', None)
 				_sysmeta = control.quote_plus(json.dumps(_sysmeta))
 
-				label = 'Staffel %s - %s' % (season, sysmeta['title'])
-				if datetime.datetime(*(time.strptime(i['premiered'], "%Y-%m-%d")[0:6])) > datetime.datetime.now():
+				if i.get('is_special') or int(season) == 0:
+					label = 'Specials / Pilotfilme - %s' % sysmeta['title']
+				else:
+					label = 'Staffel %s - %s' % (season, sysmeta['title'])
+				if i.get('premiered') and datetime.datetime(*(time.strptime(i['premiered'], "%Y-%m-%d")[0:6])) > datetime.datetime.now():
 					label = '[COLOR=red][I]{}[/I][/COLOR]'.format(label) # ffcc0000
 
 				poster = i['poster'] if 'poster' in i and 'http' in i['poster'] else sysmeta['poster']
@@ -133,8 +158,11 @@ class seasons:
 						cm.append((unwatchedMenu, 'RunPlugin(%s?action=UpdatePlayCount&meta=%s&playCount=0)' % (sysaddon, _sysmeta)))
 						meta.update({'playcount': 1, 'overlay': 7})
 						sysmeta.update({'playcount': 1, 'overlay': 7})
-						pos = season +1
-						if len(items) == season: pos = season
+						pos = season + 1
+						if season == 0:
+							pos = 1
+						elif normal_season_count == season:
+							pos = season
 					else:
 						cm.append((watchedMenu, 'RunPlugin(%s?action=UpdatePlayCount&meta=%s&playCount=1)' % (sysaddon, _sysmeta)))
 						meta.update({'playcount': 0, 'overlay': 6})
@@ -195,7 +223,7 @@ class seasons:
 
 		control.content(syshandle, 'tvshows')
 		control.plugincategory(syshandle, control.addonVersion)
-		control.endofdirectory(syshandle, cacheToDisc=True)
+		control.endofdirectory(syshandle, cacheToDisc=False)
 
 		# setzt Auswahl nach letzte als gesehen markierte Staffel -> Content: 'movies'
 		if control.getSetting('status.position') == 'true':

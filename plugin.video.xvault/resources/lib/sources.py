@@ -1,14 +1,21 @@
 # edit 2025-06-12
 import sys
+import base64
+import hashlib
 import re, json, random, time
 from concurrent.futures import ThreadPoolExecutor
-from resources.lib import log_utils, utils, control
+from html import unescape as html_unescape
+from urllib.parse import urlencode, urljoin, urlparse
+from resources.lib import log_utils, utils, control, playback_settings
 from resources.lib.control import py2_decode, py2_encode, quote_plus, parse_qsl
 import resolveurl as resolver
 # from functools import reduce
 from resources.lib.control import getKodiVersion
 
 if int(getKodiVersion()) >= 20: from infotagger.listitem import ListItemInfoTag
+
+SOURCE_CACHE_TTL = 15 * 60
+SOURCE_CACHE_LIMIT = 5
 
 # für self.sysmeta - zur späteren verwendung als meta
 _params = dict(parse_qsl(sys.argv[2].replace('?',''))) if len(sys.argv) > 1 else dict()
@@ -38,17 +45,37 @@ class sources:
         season = data.get('season') if 'season' in data else 0
         episode = data.get('episode') if 'episode' in data else 0
         premiered = data.get('premiered') if 'premiered' in data else None
+        episode_title = data.get('episode_title') if 'episode_title' in data else None
+        episode_premiered = data.get('episode_premiered') if 'episode_premiered' in data else None
         meta = params['sysmeta']
-        select = data.get('select') if 'select' in data else None
-        return title, year, imdb, season, episode, originaltitle, premiered, meta, select
+        # Stored metadata can outlive setting changes, especially in favorites or
+        # external links. Only an explicit route parameter may override the
+        # current global Standard-Aktion setting.
+        select = playback_settings.normalize_mode(params.get('select'), None)
+        return title, year, imdb, season, episode, originaltitle, premiered, meta, select, episode_title, episode_premiered
 
     def play(self, params):
-        title, year, imdb, season, episode, originaltitle, premiered, meta, select = self.get(params)
+        title, year, imdb, season, episode, originaltitle, premiered, meta, select, episode_title, episode_premiered = self.get(params)
         try:
+            try:
+                meta_data = json.loads(meta)
+                list_position = int(params.get('_xvault_list_position') or control.infoLabel('Container().CurrentItem'))
+                if list_position > 0:
+                    meta_data['_xvault_list_position'] = list_position
+                    meta_data['_xvault_list_content'] = params.get('_xvault_list_content') or control.infoLabel('Container.Content')
+                    meta_data['_xvault_container_path'] = params.get('_xvault_container_path') or control.infoLabel('Container.FolderPath')
+                    meta = json.dumps(meta_data)
+                    params['sysmeta'] = meta
+            except:
+                pass
+
             url = None
+            select = playback_settings.get_mode() if select == None else playback_settings.normalize_mode(select)
+            select = self._enforceStreamLanguageSelectionMode(select)
+            if select == None: return
+
             #Liste der gefundenen Streams
-            items = self.getSources(title, year, imdb, season, episode, originaltitle, premiered)
-            select = control.getSetting('hosts.mode') if select == None else select
+            items = self.getSources(title, year, imdb, season, episode, originaltitle, premiered, episode_title=episode_title, episode_premiered=episode_premiered)
             ## unnötig
             #select = '1' if control.getSetting('downloads') == 'true' and not (control.getSetting('download.movie.path') == '' or control.getSetting('download.tv.path') == '') else select
 
@@ -83,6 +110,33 @@ class sources:
             player().run(title, url, meta)
         except Exception as e:
             log_utils.log('Error %s' % str(e), log_utils.LOGERROR)
+
+    def _enforceStreamLanguageSelectionMode(self, select):
+        if getattr(self, 'mediatype', None) not in ['movie', 'tvshow']:
+            return select
+        if control.getSetting('hosts.language') != '0':
+            return select
+        if select == '':
+            select = '2'
+        if str(select) != '2':
+            return select
+
+        current_mode = playback_settings.get_mode()
+        if current_mode in ['0', '1']:
+            return current_mode
+
+        choice = control.selectDialog(
+            ['Dialog', 'Verzeichnis'],
+            'Stream-Sprache: Alle'
+        )
+        if choice < 0:
+            control.infoDialog('Autoplay ist bei Sprache Alle nicht moeglich.', icon='WARNING')
+            return None
+
+        select = str(choice)
+        playback_settings.set_mode(select)
+        control.infoDialog('Standard-Aktion wurde auf %s gesetzt.' % (['Dialog', 'Verzeichnis'][choice]), icon='INFO')
+        return select
 
 
 # Liste gefundene Streams Indexseite|Hoster
@@ -300,20 +354,28 @@ class sources:
             log_utils.log('Error %s' % str(e), log_utils.LOGERROR)
 
 
-    def getSources(self, title, year, imdb, season, episode, originaltitle, premiered, quality='HD', timeout=30):
+    def getSources(self, title, year, imdb, season, episode, originaltitle, premiered, quality='HD', timeout=30, episode_title=None, episode_premiered=None):
 #TODO
         # self._getHostDict()
+        sourceDict = self.sourceDict
+        sourceDict = [(i[0], i[1], i[1].priority) for i in sourceDict]
+        random.shuffle(sourceDict)
+        sourceDict = sorted(sourceDict, key=lambda i: i[2])
+
+        cache_key = self._sourceCacheKey(title, year, imdb, season, episode, originaltitle, premiered, episode_title, episode_premiered, sourceDict)
+        cached = self._readSourceCache(cache_key)
+        if cached:
+            self.sources = cached
+            log_utils.log('Quellen-Cache verwendet: %s Treffer' % len(self.sources), log_utils.LOGINFO)
+            return self.sources
+
         control.idle() #ok
         progressDialog = control.progressDialog if control.getSetting('progress.dialog') == '0' else control.progressDialogBG
         progressDialog.create(control.addonInfo('name'), '')
         progressDialog.update(0)
         progressDialog.update(0, "Quellen werden vorbereitet")
 
-        sourceDict = self.sourceDict
-        sourceDict = [(i[0], i[1], i[1].priority) for i in sourceDict]
-        random.shuffle(sourceDict)
-        sourceDict = sorted(sourceDict, key=lambda i: i[2])
-        content = 'movies' if season == 0 or season == '' or season == None else 'shows'
+        content = 'shows' if getattr(self, 'mediatype', None) == 'tvshow' else 'movies' if season == 0 or season == '' or season == None else 'shows'
         aliases, localtitle = utils.getAliases(imdb, content)
         if localtitle and title != localtitle and originaltitle != localtitle:
             if not title in aliases: aliases.append(title)
@@ -323,7 +385,7 @@ class sources:
                 aliases.append(i)
         titles = utils.get_titles_for_search(title, originaltitle, aliases)
 
-        futures = {self.executor.submit(self._getSource, titles, year, season, episode, imdb, provider[0], provider[1]): provider[0] for provider in sourceDict}
+        futures = {self.executor.submit(self._getSource, titles, year, season, episode, imdb, provider[0], provider[1], episode_title, episode_premiered): provider[0] for provider in sourceDict}
         provider_names = {provider[0].upper() for provider in sourceDict}
 
         string4 = "Total"
@@ -419,11 +481,133 @@ class sources:
         try: progressDialog.close()
         except: pass
         self.sourcesFilter()
+        self._writeSourceCache(cache_key, self.sources)
         return self.sources
 
+    def _sourceCacheKey(self, title, year, imdb, season, episode, originaltitle, premiered, episode_title, episode_premiered, sourceDict):
+        provider_state = []
+        for name, call, priority in sorted(sourceDict, key=lambda item: item[0]):
+            provider_state.append({
+                'name': name,
+                'domain': getattr(call, 'domain', ''),
+                'priority': priority
+            })
 
-    def _getSource(self, titles, year, season, episode, imdb, source, call):
+        settings = {}
+        for setting in [
+            'hosts.quality',
+            'hosts.language',
+            'hosts.language.mode',
+            'hosts.language.unknown',
+            'hosts.language.multi',
+            'hosts.sort.provider',
+            'hosts.sort.priority',
+            'hosts.limit',
+            'hosts.limit.num'
+        ]:
+            settings[setting] = control.getSetting(setting)
+
+        key = {
+            'version': 1,
+            'addon': control.addonVersion,
+            'mediatype': getattr(self, 'mediatype', None),
+            'title': py2_decode(title),
+            'originaltitle': py2_decode(originaltitle),
+            'year': str(year or ''),
+            'imdb': str(imdb or ''),
+            'season': str(season or ''),
+            'episode': str(episode or ''),
+            'premiered': str(premiered or ''),
+            'episode_title': str(episode_title or ''),
+            'episode_premiered': str(episode_premiered or ''),
+            'aliases': sorted([str(i) for i in getattr(self, 'aliases', [])]),
+            'providers': provider_state,
+            'settings': settings
+        }
+        raw_key = json.dumps(key, sort_keys=True)
+        return hashlib.sha256(raw_key.encode('utf-8')).hexdigest()
+
+    def _readSourceCache(self, cache_key):
         try:
+            raw = control.window.getProperty(self.sourceCacheProperty)
+            if not raw:
+                return None
+            cache = json.loads(raw)
+            if cache.get('key') == cache_key:
+                entry = cache
+            else:
+                entry = (cache.get('entries') or {}).get(cache_key)
+            if not entry:
+                return None
+            if int(time.time()) - int(entry.get('timestamp', 0)) > SOURCE_CACHE_TTL:
+                return None
+            items = entry.get('items')
+            if not isinstance(items, list) or len(items) == 0:
+                return None
+            return items
+        except Exception as e:
+            log_utils.log('Quellen-Cache konnte nicht gelesen werden: %s' % str(e), log_utils.LOGWARNING)
+            return None
+
+    def _writeSourceCache(self, cache_key, items):
+        try:
+            if not isinstance(items, list) or len(items) == 0:
+                return
+            payload = self._readSourceCachePayload()
+            entries = payload.get('entries')
+            if not isinstance(entries, dict):
+                entries = {}
+            now = int(time.time())
+            entries[cache_key] = {
+                'timestamp': int(time.time()),
+                'items': items
+            }
+            for key, entry in list(entries.items()):
+                if now - int(entry.get('timestamp', 0)) > SOURCE_CACHE_TTL:
+                    entries.pop(key, None)
+            while len(entries) > SOURCE_CACHE_LIMIT:
+                oldest = sorted(entries.items(), key=lambda item: int(item[1].get('timestamp', 0)))[0][0]
+                entries.pop(oldest, None)
+            payload = {
+                'version': 1,
+                'entries': entries
+            }
+            control.window.setProperty(self.sourceCacheProperty, json.dumps(payload))
+            log_utils.log('Quellen-Cache gespeichert: %s Treffer' % len(items), log_utils.LOGINFO)
+        except Exception as e:
+            log_utils.log('Quellen-Cache konnte nicht gespeichert werden: %s' % str(e), log_utils.LOGWARNING)
+
+    def _readSourceCachePayload(self):
+        try:
+            raw = control.window.getProperty(self.sourceCacheProperty)
+            if not raw:
+                return {'version': 1, 'entries': {}}
+            payload = json.loads(raw)
+            if isinstance(payload.get('entries'), dict):
+                return payload
+            if payload.get('key') and payload.get('items'):
+                return {
+                    'version': 1,
+                    'entries': {
+                        payload.get('key'): {
+                            'timestamp': payload.get('timestamp', 0),
+                            'items': payload.get('items')
+                        }
+                    }
+                }
+        except:
+            pass
+        return {'version': 1, 'entries': {}}
+
+
+    def _getSource(self, titles, year, season, episode, imdb, source, call, episode_title=None, episode_premiered=None):
+        try:
+            try:
+                call.mediatype = getattr(self, 'mediatype', None)
+                call.episode_title = episode_title
+                call.episode_premiered = episode_premiered
+            except:
+                pass
             sources = call.run(titles, year, season, episode, imdb)  # kasi self.hostDict
             if sources == None or sources == []: raise Exception()
             sources = [json.loads(t) for t in set(json.dumps(d, sort_keys=True) for d in sources)]
@@ -434,6 +618,113 @@ class sources:
             self.sources.extend(sources)
         except:
             pass
+
+    def _normalizeStreamLanguage(self, item):
+        language_codes = self._languageCodesFromText(item.get('language', ''))
+        if language_codes:
+            return self._languageFromCodes(language_codes)
+
+        values = [item.get('info', '')]
+        codes = set()
+        for value in values:
+            codes.update(self._languageCodesFromText(value))
+        return self._languageFromCodes(codes)
+
+    def _languageFromCodes(self, codes):
+        if 'multi' in codes or ('de' in codes and 'en' in codes):
+            return 'multi'
+        if 'de' in codes:
+            return 'de'
+        if 'en' in codes:
+            return 'en'
+        return 'unknown'
+
+    def _languageCodesFromText(self, value):
+        if value == None:
+            return set()
+        if isinstance(value, (list, tuple, set)):
+            value = ' '.join([str(i) for i in value])
+        text = str(value).lower()
+        text = re.sub(r'[^a-z0-9]+', ' ', text)
+        tokens = set([token for token in text.split() if token])
+        codes = set()
+
+        if tokens.intersection(set(['multi', 'multilang', 'multilanguage', 'multilingual', 'dual', 'dl'])):
+            codes.add('multi')
+        if re.search(r'\bdual\s+audio\b', text):
+            codes.add('multi')
+        if re.search(r'\b(?:ger|deu|german|deutsch|de)\s+(?:eng|english|englisch|en)\b', text):
+            codes.add('multi')
+        if re.search(r'\b(?:eng|english|englisch|en)\s+(?:ger|deu|german|deutsch|de)\b', text):
+            codes.add('multi')
+
+        if tokens.intersection(set(['de', 'deu', 'ger', 'german', 'deutsch'])):
+            codes.add('de')
+        if tokens.intersection(set(['en', 'eng', 'english', 'englisch'])):
+            codes.add('en')
+        return codes
+
+    def _applyLanguagePreference(self):
+        if getattr(self, 'mediatype', None) not in ['movie', 'tvshow']:
+            return
+        if len(self.sources) == 0:
+            return
+
+        language_setting = control.getSetting('hosts.language')
+        if language_setting == '':
+            language_setting = '0'
+
+        for item in self.sources:
+            item['_xvault_language'] = self._normalizeStreamLanguage(item)
+
+        if language_setting == '0':
+            return
+
+        target = {'1': 'de', '2': 'en', '3': 'multi'}.get(language_setting)
+        if target == None:
+            return
+
+        strict = control.getSetting('hosts.language.mode') == '1'
+        keep_unknown = control.getSetting('hosts.language.unknown') == 'true'
+        allow_multi = control.getSetting('hosts.language.multi') == 'true'
+
+        def matches(item):
+            language = item.get('_xvault_language', 'unknown')
+            if language == target:
+                return True
+            if target in ['de', 'en'] and language == 'multi' and allow_multi:
+                return True
+            if language == 'unknown' and keep_unknown:
+                return True
+            return False
+
+        if strict:
+            self.sources = [item for item in self.sources if matches(item)]
+            return
+
+        def language_rank(item):
+            language = item.get('_xvault_language', 'unknown')
+            if language == target:
+                return 0
+            if target in ['de', 'en'] and language == 'multi' and allow_multi:
+                return 1
+            if language == 'unknown' and keep_unknown:
+                return 2
+            return 3
+
+        self.sources = sorted(self.sources, key=language_rank)
+
+    def _languageLabel(self, item):
+        language = item.get('_xvault_language')
+        if language == None:
+            language = self._normalizeStreamLanguage(item)
+            item['_xvault_language'] = language
+        return {
+            'de': 'DE',
+            'en': 'EN',
+            'multi': 'MULTI',
+            'unknown': '?'
+        }.get(language, '?')
 
 
     def sourcesFilter(self):
@@ -465,6 +756,8 @@ class sources:
 
         if control.getSetting('hosts.sort.priority') == 'true' and self.mediatype == 'tvshow': self.sources = sorted(self.sources, key=lambda k: (k.get('prioHoster', 0) >= 999, k['priority']), reverse=False)
 
+        self._applyLanguagePreference()
+
         if str(control.getSetting('hosts.limit')) == 'true':
             self.sources = self.sources[:int(control.getSetting('hosts.limit.num'))]
         else:
@@ -475,10 +768,12 @@ class sources:
             q = self.sources[i]['quality']
             s = self.sources[i]['source']
             ## s = s.rsplit('.', 1)[0]
-            l = self.sources[i]['language']
+            l = self._languageLabel(self.sources[i])
 
             try: f = (' | '.join(['[I]%s [/I]' % info.strip() for info in self.sources[i]['info'].split('|')]))
             except: f = ''
+            if l:
+                f = ('[B]%s[/B] | %s' % (l, f)) if f else '[B]%s[/B]' % l
 
             label = '%02d | [B]%s[/B] | ' % (int(i + 1), p)
             if q in ['4K', '1440p', '1080p', '720p']: label += '%s | [B][I]%s [/I][/B] | %s' % (s, q, f)
@@ -502,7 +797,7 @@ class sources:
         return self.sources
 
 
-    def sourcesResolve(self, item, info=False):
+    def sourcesResolve(self, item, info=False, check_stream=False):
         try:
             self.url = None
             url = item['url']
@@ -513,14 +808,24 @@ class sources:
             url = call.resolve(url)
 
             if not direct == True:
-                try:
-                    hmf = resolver.HostedMediaFile(url=url, include_disabled=True, include_universal=False, include_popups=False)
-                    if not hmf.valid_url():
-                        hmf = resolver.HostedMediaFile(url=url, include_disabled=True, include_universal=False, include_popups=True)
-                    if hmf.valid_url():
-                        url = hmf.resolve()
-                        if url == False or url == None or url == '': url = None # raise Exception()
-                except:
+                resolved = False
+                voe_url = self._resolveVoeDirect(url, item)
+                if voe_url:
+                    url = voe_url
+                    resolved = True
+                else:
+                    try:
+                        hmf = resolver.HostedMediaFile(url=url, include_disabled=True, include_universal=False, include_popups=False)
+                        if not hmf.valid_url():
+                            hmf = resolver.HostedMediaFile(url=url, include_disabled=True, include_universal=False, include_popups=True)
+                        if hmf.valid_url():
+                            url = hmf.resolve()
+                            resolved = True
+                            if url == False or url == None or url == '': url = None # raise Exception()
+                    except:
+                        url = None
+                if url and not resolved and not self._looksLikeDirectMediaUrl(url):
+                    log_utils.log('Resolver lieferte keinen Direktstream: Provider %s / %s' % (item['provider'], item['source']), log_utils.LOGWARNING)
                     url = None
             elif item.get('prioHoster', 0) >= 999:
                 try:
@@ -535,11 +840,9 @@ class sources:
                 log_utils.log('Kein Video Link gefunden: Provider %s / %s / %s ' % (item['provider'], item['source'] , str(item['source'])), log_utils.LOGERROR)
                 raise Exception()
 
-            # if not utils.test_stream(url):
-            #     log_utils.log('URL Test Error: %s' % url, log_utils.LOGERROR)
-            #     raise Exception()
-
-            # url = utils.m3u8_check(url)
+            if check_stream and not local and not utils.test_stream(url):
+                log_utils.log('URL Test Error: Provider %s / %s / %s' % (item['provider'], item['source'], url), log_utils.LOGERROR)
+                raise Exception()
 
             if url:
                 self.url = url
@@ -549,6 +852,78 @@ class sources:
         except:
             if info: self.errorForSources()
             return
+
+    def _looksLikeDirectMediaUrl(self, url):
+        try:
+            clean_url = str(url).split('|', 1)[0].split('?', 1)[0].lower()
+            return re.search(r'\.(?:m3u8?|mpd|mp4|mkv|avi|mov|flv|wmv|webm|ts)$', clean_url) != None
+        except:
+            return False
+
+    def _resolveVoeDirect(self, url, item):
+        try:
+            if 'voe' not in str(item.get('source', '')).lower() and 'voe' not in urlparse(str(url).split('|', 1)[0]).netloc.lower():
+                return None
+
+            import requests
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            }
+            page_url = str(url).split('|', 1)[0]
+            response = requests.get(page_url, headers=headers, timeout=12, allow_redirects=True)
+            html = response.text or ''
+            real_url = response.url
+
+            for _ in range(3):
+                redirect = re.search(r"window\.location\.href\s*=\s*'([^']+)'", html)
+                if not redirect:
+                    break
+                page_url = urljoin(real_url, html_unescape(redirect.group(1)))
+                response = requests.get(page_url, headers=headers, timeout=12, allow_redirects=True)
+                html = response.text or ''
+                real_url = response.url
+
+            packed = re.search(r'json">\["([^"]+)"\]</script>\s*<script\s+src="([^"]+)', html)
+            if not packed:
+                return None
+
+            script_url = urljoin(real_url, html_unescape(packed.group(2)))
+            script = requests.get(script_url, headers=headers, timeout=12).text or ''
+            repl = re.search(r"(\[(?:'\W{2}'[,\]]){1,9})", script)
+            if not repl:
+                return None
+
+            data = self._decodeVoePayload(packed.group(1), repl.group(1))
+            media_url = data.get('direct_access_url') or data.get('source') or data.get('file')
+            if not media_url:
+                return None
+
+            stream_headers = urlencode({
+                'User-Agent': headers['User-Agent'],
+                'Referer': real_url,
+            })
+            log_utils.log('VOE direkt aufgeloest: Provider %s / %s' % (item.get('provider'), item.get('source')), log_utils.LOGINFO)
+            return '%s|%s' % (media_url, stream_headers)
+        except Exception as e:
+            log_utils.log('VOE Direktaufloesung fehlgeschlagen: %s' % str(e), log_utils.LOGWARNING)
+            return None
+
+    def _decodeVoePayload(self, encoded, replacements):
+        tokens = [re.escape(token) for token in replacements[2:-2].split("','")]
+        text = ''
+        for char in encoded:
+            value = ord(char)
+            if 64 < value < 91:
+                value = (value - 52) % 26 + 65
+            elif 96 < value < 123:
+                value = (value - 84) % 26 + 97
+            text += chr(value)
+        for token in tokens:
+            text = re.sub(token, '', text)
+        step = base64.b64decode(text).decode('utf-8', errors='replace')
+        step = ''.join(chr(ord(char) - 3) for char in step)
+        return json.loads(base64.b64decode(step[::-1]).decode('utf-8', errors='replace'))
 
 
     def sourcesDialog(self, items):
@@ -577,7 +952,7 @@ class sources:
                 try:
                     if items[i]['source'] == block: raise Exception()
 
-                    future = self.executor.submit(self.sourcesResolve, items[i])
+                    future = self.executor.submit(self.sourcesResolve, items[i], False, True)
 
                     try:
                         if progressDialog.iscanceled(): break
@@ -657,7 +1032,7 @@ class sources:
             try:
                 if control.abortRequested: return sys.exit()
 
-                url = self.sourcesResolve(items[i])
+                url = self.sourcesResolve(items[i], False, True)
                 if u == None: u = url
                 if not url == None: break
             except:
@@ -762,5 +1137,6 @@ class sources:
     def getConstants(self):
         self.itemsProperty = '%s.container.items' % control.Addon.getAddonInfo('id')
         self.metaProperty = '%s.container.meta'  % control.Addon.getAddonInfo('id')
+        self.sourceCacheProperty = '%s.sources.last' % control.Addon.getAddonInfo('id')
         from scrapers import sources
         self.sourceDict = sources()
