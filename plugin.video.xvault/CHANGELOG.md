@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [2026.09.13.1] - 2026-09-13
+
+- LiveTV-Senderlogos werden fuer die verfuegbaren DE/AT/CH-Sender ueber iptv-org-Sender-, Feed- und Alternativnamen robuster zugeordnet.
+- LiveTV lite reichert 2ix2- und Nydus-Senderlisten jetzt ebenfalls mit passenden Senderlogos an.
+
 ## [2026.07.06.1] - 2026-07-06
 
 - Filmpalast-Suchpfade werden nicht mehr doppelt kodiert, damit Titel mit Leerzeichen und Umlauten wieder Treffer liefern.
